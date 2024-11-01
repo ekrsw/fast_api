@@ -9,5 +9,6 @@
 1. **リポジトリのクローン**
 
    ```bash
-   git clone https://github.com/yourusername/my_fastapi_project.git
-   cd my_fastapi_project
+   git clone https://github.com/ekrsw/fast_api.git
+   cd fast_api
+   docker-compose up --build -d
