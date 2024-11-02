@@ -13,7 +13,7 @@ class Item(ItemBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserCreate(BaseModel):
     username: str
@@ -22,9 +22,10 @@ class UserCreate(BaseModel):
 class User(BaseModel):
     id: int
     username: str
+    is_admin: bool  # 管理者フラグを含める
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Token(BaseModel):
     access_token: str

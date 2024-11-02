@@ -1,6 +1,6 @@
 # app/models.py
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Boolean, Column, Integer, String
 from .database import Base
 
 class User(Base):
@@ -9,6 +9,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    is_admin = Column(Boolean, default=False)  # 管理者フラグを追加
 
 class Item(Base):
     __tablename__ = "items"
