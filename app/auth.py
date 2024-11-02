@@ -16,13 +16,33 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
+# パスワードを検証する関数
 def verify_password(plain_password, hashed_password):
+    """
+    引数で受け取った平文のパスワードと、ハッシュ化されたパスワードを比較して、
+    一致するかどうかを検証します。
+    """
     return pwd_context.verify(plain_password, hashed_password)
 
+# パスワードをハッシュ化する関数
 def get_password_hash(password):
+    """
+    引数で受け取ったパスワードをハッシュ化して返します。
+    """
     return pwd_context.hash(password)
 
+# アクセストークンを作成する関数
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    """
+    JWT形式のアクセストークンを作成して返します。
+    
+    args:
+    - data: トークンに含めるデータ（例: {"sub": "ユーザー名"}）
+    - expires_delta: トークンの有効期限（指定がない場合はデフォルトで15分）
+
+    return:
+    - 作成されたJWT形式のアクセストークン
+    """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
