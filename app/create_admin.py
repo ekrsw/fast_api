@@ -29,8 +29,8 @@ def create_initial_admin():
 
     # 管理者ユーザーを作成
     admin_user = crud.create_user(
-        db, 
-        schemas.UserCreate(username=username, password=password), 
+        db,
+        schemas.UserCreate(username=username, password=password),
         is_admin=True
     )
     print(f"Admin user created: {admin_user.username}")

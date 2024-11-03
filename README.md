@@ -16,3 +16,24 @@
 3. **管理者ユーザーを作成**
    ```bash
    docker-compose exec api python -m app.create_admin
+4. **アクセストークンの取得**
+   ```bash
+   curl -X POST "http://localhost:8080/token" \
+     -H "Content-Type: application/x-www-form-urlencoded" \
+     -d "username=admin&password=my_admin_password"
+   ```
+   以下のようにレスポンスが返ってきます。
+   ```bash
+   {
+   "access_token": "取得したアクセストークンがここに入ります",
+   "token_type": "bearer"
+   }
+   ```
+5. **APIのテスト**
+   ```bash
+   curl -X POST "http://localhost:8080/items/" \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer 取得したアクセストークンをここに入れます" \
+     -d '{
+           "name": "新しいアイテム名"
+         }'
