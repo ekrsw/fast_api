@@ -26,10 +26,16 @@
    ```bash
    {
    "access_token": "取得したアクセストークンがここに入ります",
-   "token_type": "bearer"
+   "token_type": "bearer",
+   "refresh_token": "取得したリフレッシュトークンがここに入ります"
    }
    ```
-5. **APIのテスト**
+5. **リフレッシュトークンを使用して新しいアクセストークンを取得**
+   ```bash
+   curl -X POST "http://localhost:8080/refresh" \
+     -H "refresh-token: 取得したリフレッシュトークンをここに入れます"
+   ```
+6. **APIのテスト**
    ```bash
    curl -X POST "http://localhost:8080/items/" \
      -H "Content-Type: application/json" \

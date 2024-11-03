@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 # アイテムの基本モデル（共通項目を定義）
 class ItemBase(BaseModel):
@@ -36,3 +37,4 @@ class User(BaseModel):
 class Token(BaseModel):
     access_token: str  # JWT アクセストークン
     token_type: str  # トークンのタイプ（例: "bearer"）
+    refresh_token: Optional[str] = None

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 from . import models, schemas, database, auth, crud
 from jose import JWTError, jwt
@@ -93,7 +93,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
 @app.post("/token", response_model=schemas.Token)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
-    ログインしてアクセストークンを取得します。
+    ログインしてアクセストークンとリフレッシュトークンを取得します。
 
     Args:
         form_data (OAuth2PasswordRequestForm, optional): フォームデータからユーザー名とパスワードを取得。
@@ -103,7 +103,7 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         HTTPException: 認証に失敗した場合。
 
     Returns:
-        dict: アクセストークンとトークンタイプを含む辞書。
+        dict: アクセストークンとトークンタイプ,リフレッシュトークンを含む辞書。
     """
     user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -116,7 +116,46 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
     access_token = create_access_token_for_user(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token_expires = timedelta(minutes=auth.REFRESH_TOKEN_EXPIRE_MINUTES)
+    refresh_token = auth.create_refresh_token(
+        data={"sub": user.username}, expires_delta=refresh_token_expires
+    )
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "refresh_token": refresh_token
+    }
+
+# 新しいアクセストークンを取得するためのエンドポイント
+@app.post("/refresh", response_model=schemas.Token)
+def refresh_access_token(
+    refresh_token: str = Header(...),
+    db: Session = Depends(get_db)
+    ):
+    """
+    リフレッシュトークンを使用して新しいアクセストークンを取得します。
+    """
+    try:
+        payload = jwt.decode(refresh_token, auth.REFRESH_SECRET_KEY, algorithms=[auth.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="トークンが無効です")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="トークンが無効です")
+
+    user = crud.get_user_by_username(db, username=username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="ユーザーが存在しません")
+
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token_for_user(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
 
 # 現在のユーザーの取得
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
