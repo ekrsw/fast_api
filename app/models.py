@@ -1,7 +1,7 @@
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, func
-from .database import Base
+from sqlalchemy import Boolean, Column, Integer, String
+from .database import BaseDatabase
 
-class User(Base):
+class User(BaseDatabase):
     """
     ユーザーモデル。ユーザーの基本情報を保持します。
     """
@@ -10,9 +10,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    is_admin = Column(Boolean, default=False)  # 管理者フラグを追加
+    is_admin = Column(Boolean, default=False)  # 管理者フラグ
 
-class Item(Base):
+class Item(BaseDatabase):
     """
     アイテムモデル。アイテムの情報を保持します。
     """
@@ -20,5 +20,3 @@ class Item(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

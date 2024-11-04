@@ -43,3 +43,7 @@
      -d '{
            "name": "新しいアイテム名"
          }'
+## PostgreSQLへ接続
+   ```bash
+   docker exec -it fast_api-db-1 psql -U [DATABASE_USER] [DATABASE_NAME]
+   ```

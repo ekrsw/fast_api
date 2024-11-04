@@ -15,7 +15,7 @@ load_dotenv()
 app = FastAPI()
 
 # データベースのテーブルを作成
-models.Base.metadata.create_all(bind=database.engine)
+database.Base.metadata.create_all(bind=database.engine)
 
 # OAuth2 パスワード認証を設定し、トークンの取得エンドポイントを指定
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")

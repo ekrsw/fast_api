@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import Column, create_engine, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
@@ -25,3 +25,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # 基本のマッピングクラスを作成するためのベースクラスを生成
 Base = declarative_base()
+
+class BaseDatabase(Base):
+    __abstract__=True
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
