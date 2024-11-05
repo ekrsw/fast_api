@@ -18,7 +18,7 @@
    docker-compose exec api python -m app.create_admin
 4. **アクセストークンの取得**
    ```bash
-   curl -X POST "http://localhost:8080/token" \
+   curl -X POST "http://localhost:8080/auth/token" \
      -H "Content-Type: application/x-www-form-urlencoded" \
      -d "username=admin&password=my_admin_password"
    ```
@@ -32,7 +32,7 @@
    ```
 5. **リフレッシュトークンを使用して新しいアクセストークンを取得**
    ```bash
-   curl -X POST "http://localhost:8080/refresh" \
+   curl -X POST "http://localhost:8080/auth/refresh" \
      -H "refresh-token: 取得したリフレッシュトークンをここに入れます"
    ```
 6. **APIのテスト**
