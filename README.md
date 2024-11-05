@@ -17,6 +17,7 @@
    ```bash
    docker-compose exec api python -m app.create_admin
 4. **アクセストークンの取得**
+   Mac, Linuxの場合
    ```bash
    curl -X POST "http://localhost:8080/auth/token" \
      -H "Content-Type: application/x-www-form-urlencoded" \
@@ -30,6 +31,33 @@
    "refresh_token": "取得したリフレッシュトークンがここに入ります"
    }
    ```
+   Windows Power Shellの場合
+   ```Power Shell
+   $headers = @{
+    "Content-Type" = "application/x-www-form-urlencoded"
+   }
+
+   $body = @{
+      "username" = "admin"
+      "password" = "my_admin_password"
+   }
+
+   $response = Invoke-WebRequest -Uri "http://localhost:8080/auth/token" -Method Post -Headers $headers -Body $body
+   $json = $response.Content | ConvertFrom-Json
+
+   # トークンを表示
+   $accessToken = $json.access_token
+   $refreshToken = $json.refresh_token
+
+   Write-Output "Access Token: $accessToken"
+   Write-Output "Refresh Token: $refreshToken"
+   ```
+   以下の様にトークンが表示されます。
+   ```
+   Access Token: "取得したアクセストークンがここに入ります"
+   Refresh Token: "取得したリフレッシュトークンがここに入ります"
+   ```
+
 5. **リフレッシュトークンを使用して新しいアクセストークンを取得**
    ```bash
    curl -X POST "http://localhost:8080/auth/refresh" \
