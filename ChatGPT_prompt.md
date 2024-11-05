@@ -160,7 +160,7 @@ def create_user(db: Session, user: schemas.UserCreate, is_admin: bool = False):
 ```
 ## app/database.py
 ```app/database.py
-from sqlalchemy import create_engine
+from sqlalchemy import Column, create_engine, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
@@ -187,6 +187,12 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # 基本のマッピングクラスを作成するためのベースクラスを生成
 Base = declarative_base()
+
+class BaseDatabase(Base):
+    __abstract__=True
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 ```
 ## app/main.py
 ```app/main.py
@@ -207,7 +213,7 @@ load_dotenv()
 app = FastAPI()
 
 # データベースのテーブルを作成
-models.Base.metadata.create_all(bind=database.engine)
+database.Base.metadata.create_all(bind=database.engine)
 
 # OAuth2 パスワード認証を設定し、トークンの取得エンドポイントを指定
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -515,10 +521,10 @@ def delete_item(
 ```
 ## app/models.py
 ```app/models.py
-from sqlalchemy import Boolean, Column, Integer, String, DateTime, func
-from .database import Base
+from sqlalchemy import Boolean, Column, Integer, String
+from .database import BaseDatabase
 
-class User(Base):
+class User(BaseDatabase):
     """
     ユーザーモデル。ユーザーの基本情報を保持します。
     """
@@ -527,9 +533,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    is_admin = Column(Boolean, default=False)  # 管理者フラグを追加
+    is_admin = Column(Boolean, default=False)  # 管理者フラグ
 
-class Item(Base):
+class Item(BaseDatabase):
     """
     アイテムモデル。アイテムの情報を保持します。
     """
@@ -537,8 +543,6 @@ class Item(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 ```
 ## app/schemas.py
 ```app/schemas.py
