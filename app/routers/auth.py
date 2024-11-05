@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from .. import schemas, crud, auth, database
+from .. import schemas, crud, auth
+from ..dependencies import get_db
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 import os
@@ -11,7 +12,7 @@ router = APIRouter(
 )
 
 @router.post("/token", response_model=schemas.Token)
-def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = auth.authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -20,11 +21,11 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token_expires = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30)))
-    access_token = auth.create_access_token_for_user(
+    access_token = auth.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     refresh_token_expires = timedelta(minutes=int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", 1440)))
-    refresh_token = auth.create_access_token(
+    refresh_token = auth.create_refresh_token(
         data={"sub": user.username}, expires_delta=refresh_token_expires
     )
     return {
@@ -36,10 +37,10 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 @router.post("/refresh", response_model=schemas.Token)
 def refresh_access_token(
     refresh_token: str = Depends(auth.get_refresh_token),
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(get_db)
 ):
     try:
-        payload = auth.decode_token(refresh_token)
+        payload = auth.decode_token(refresh_token, auth.REFRESH_SECRET_KEY, [auth.REFRESH_ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid token")
@@ -51,7 +52,7 @@ def refresh_access_token(
         raise HTTPException(status_code=404, detail="User not found")
 
     access_token_expires = timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30)))
-    access_token = auth.create_access_token_for_user(
+    access_token = auth.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
 

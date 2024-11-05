@@ -1,6 +1,16 @@
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from .database import get_db
-from .auth import get_current_user
+from .database import SessionLocal
 
-# 他の依存関係をここに追加可能
+def get_db():
+    """
+    データベースセッションを取得するための依存関係。
+
+    Yields:
+        Session: データベースセッションオブジェクト。
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

@@ -33,8 +33,8 @@ class User(BaseModel):
     class Config:
         from_attributes = True  # ORM モードを有効にして属性から値を取得できるようにする
 
-# トークンのモデル（認証用のアクセストークンとそのタイプ）
+# トークンのモデル（認証用のアクセストークンとリフレッシュトークン）
 class Token(BaseModel):
     access_token: str  # JWT アクセストークン
     token_type: str  # トークンのタイプ（例: "bearer"）
-    refresh_token: Optional[str] = None
+    refresh_token: Optional[str] = None  # JWT リフレッシュトークン
