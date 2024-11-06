@@ -1,8 +1,9 @@
 from sqlalchemy.orm import Session
 from . import models, schemas, auth
+from typing import Optional, List
 
 # ユーザー名でユーザーを取得する関数
-def get_user_by_username(db: Session, username: str):
+def get_user_by_username(db: Session, username: str) -> Optional[models.User]:
     """
     指定されたユーザー名に一致するユーザーをデータベースから取得します。
 
@@ -16,7 +17,7 @@ def get_user_by_username(db: Session, username: str):
     return db.query(models.User).filter(models.User.username == username).first()
 
 # 新規ユーザーを作成する関数
-def create_user(db: Session, user: schemas.UserCreate, is_admin: bool = False):
+def create_user(db: Session, user: schemas.UserCreate, is_admin: bool = False) -> models.User:
     """
     新しいユーザーをデータベースに作成します。パスワードはハッシュ化されます。
 
@@ -35,21 +36,66 @@ def create_user(db: Session, user: schemas.UserCreate, is_admin: bool = False):
     db.refresh(db_user)
     return db_user
 
-# アイテム関連の関数を追加
-def get_item(db: Session, item_id: int):
+# アイテムIDで特定のアイテムを取得する関数
+def get_item(db: Session, item_id: int) -> Optional[models.Item]:
+    """
+    指定されたIDに一致するアイテムをデータベースから取得します。
+
+    Args:
+        db (Session): データベースセッション。
+        item_id (int): 検索対象のアイテムID。
+
+    Returns:
+        Optional[models.Item]: アイテムが見つかった場合はそのアイテムオブジェクト、見つからない場合はNone。
+    """
     return db.query(models.Item).filter(models.Item.id == item_id).first()
 
-def get_items(db: Session, skip: int = 0, limit: int = 10):
+# 複数のアイテムを取得する関数
+def get_items(db: Session, skip: int = 0, limit: int = 10) -> List[models.Item]:
+    """
+    指定されたオフセットと制限で、データベースから複数のアイテムを取得します。
+
+    Args:
+        db (Session): データベースセッション。
+        skip (int, optional): スキップするアイテム数。デフォルトは0。
+        limit (int, optional): 取得するアイテム数の制限。デフォルトは10。
+
+    Returns:
+        List[models.Item]: アイテムのリスト。
+    """
     return db.query(models.Item).offset(skip).limit(limit).all()
 
+# 新しいアイテムを作成する関数
 def create_item(db: Session, item: schemas.ItemCreate):
+    """
+    新しいアイテムをデータベースに作成します。
+
+    Args:
+        db (Session): データベースセッション。
+        item (schemas.ItemCreate): 作成するアイテムのデータを含むItemCreateスキーマ。
+
+    Returns:
+        models.Item: 作成されたアイテムオブジェクト。
+    """
     db_item = models.Item(name=item.name)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     return db_item
 
-def update_item(db: Session, item_id: int, item: schemas.ItemCreate):
+# アイテムを更新する関数
+def update_item(db: Session, item_id: int, item: schemas.ItemCreate) -> Optional[models.Item]:
+    """
+    指定されたIDのアイテムを更新します。
+
+    Args:
+        db (Session): データベースセッション。
+        item_id (int): 更新対象のアイテムID。
+        item (schemas.ItemCreate): 新しいアイテムデータを含むItemCreateスキーマ。
+
+    Returns:
+        Optional[models.Item]: 更新されたアイテムオブジェクト。アイテムが見つからない場合はNone。
+    """
     db_item = db.query(models.Item).filter(models.Item.id == item_id).first()
     if db_item is None:
         return None
@@ -58,7 +104,18 @@ def update_item(db: Session, item_id: int, item: schemas.ItemCreate):
     db.refresh(db_item)
     return db_item
 
-def delete_item(db: Session, item_id: int):
+# アイテムを削除する関数
+def delete_item(db: Session, item_id: int) -> Optional[models.Item]:
+    """
+    指定されたIDのアイテムをデータベースから削除します。
+
+    Args:
+        db (Session): データベースセッション。
+        item_id (int): 削除対象のアイテムID。
+
+    Returns:
+        Optional[models.Item]: 削除されたアイテムオブジェクト。アイテムが見つからない場合はNone。
+    """
     db_item = db.query(models.Item).filter(models.Item.id == item_id).first()
     if db_item is None:
         return None

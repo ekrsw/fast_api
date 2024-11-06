@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # 初期管理者アカウントを作成する関数
-def create_initial_admin():
+def create_initial_admin() -> None:
     """
     初期管理者アカウントを作成します。
     環境変数からユーザー名とパスワードを取得し、既存の管理者がいない場合のみ新たに作成します。

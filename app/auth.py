@@ -43,25 +43,25 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # リフレッシュトークンを作成する関数
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(days=1))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=REFRESH_ALGORITHM)
 
 # トークンをデコードする関数
-def decode_token(token: str, secret_key: str, algorithms: list):
+def decode_token(token: str, secret_key: str, algorithms: list) -> dict:
     return jwt.decode(token, secret_key, algorithms=algorithms)
 
 # ユーザー認証の関数
-def authenticate_user(db: Session, username: str, password: str):
+def authenticate_user(db: Session, username: str, password: str) -> Optional[schemas.User]:
     user = crud.get_user_by_username(db, username)
     if not user or not verify_password(password, user.hashed_password):
         return False
     return user
 
 # 現在のユーザーの取得
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> schemas.User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -80,7 +80,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 # リフレッシュトークンの取得（ヘッダーから取得）
-def get_refresh_token(refresh_token: str = Header(...)):
+def get_refresh_token(refresh_token: str = Header(...)) -> str:
     return refresh_token
 
 # JWT エラークラスのラッピング

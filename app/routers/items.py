@@ -15,7 +15,7 @@ def create_item(
     item: schemas.ItemCreate,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
-):
+    ) -> schemas.Item:
     return crud.create_item(db=db, item=item)
 
 @router.get("/", response_model=List[schemas.Item])
@@ -24,7 +24,7 @@ def read_items(
     limit: int = 10,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
-):
+    ) -> List[schemas.Item]:
     return crud.get_items(db, skip=skip, limit=limit)
 
 @router.get("/{item_id}", response_model=schemas.Item)
@@ -32,7 +32,7 @@ def read_item(
     item_id: int,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
-):
+    ) -> schemas.Item:
     db_item = crud.get_item(db, item_id=item_id)
     if db_item is None:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -44,7 +44,7 @@ def update_item(
     item: schemas.ItemCreate,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
-):
+    ) -> schemas.Item:
     return crud.update_item(db=db, item_id=item_id, item=item)
 
 @router.delete("/{item_id}", response_model=dict)
@@ -52,6 +52,6 @@ def delete_item(
     item_id: int,
     db: Session = Depends(get_db),
     current_user: schemas.User = Depends(get_current_user)
-):
+    ) -> dict:
     crud.delete_item(db=db, item_id=item_id)
     return {"detail": "Item deleted"}
