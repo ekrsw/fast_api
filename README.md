@@ -17,7 +17,8 @@
    ```bash
    docker-compose exec api python -m app.create_admin
 4. **アクセストークンの取得**
-   Mac, Linuxの場合
+   
+   #### Mac, Linuxの場合
    ```bash
    curl -X POST "http://localhost:8080/auth/token" \
      -H "Content-Type: application/x-www-form-urlencoded" \
@@ -31,7 +32,7 @@
    "refresh_token": "取得したリフレッシュトークンがここに入ります"
    }
    ```
-   Windows Power Shellの場合
+   #### Windows Power Shellの場合
    ```Power Shell
    $headers = @{
     "Content-Type" = "application/x-www-form-urlencoded"
@@ -59,11 +60,23 @@
    ```
 
 5. **リフレッシュトークンを使用して新しいアクセストークンを取得**
+
+   #### Mac, Linuxの場合
    ```bash
    curl -X POST "http://localhost:8080/auth/refresh" \
      -H "refresh-token: 取得したリフレッシュトークンをここに入れます"
    ```
+   #### Windows Power Shellの場合
+   ```Power Shell
+   $headers = @{
+    "refresh-token" = "取得したリフレッシュトークンをここに入れます"
+   }
+
+   Invoke-RestMethod -Uri "http://localhost:8080/auth/refresh" -Method Post -Headers $headers
+   ```
 6. **APIのテスト**
+   
+   #### Mac, Linuxの場合
    ```bash
    curl -X POST "http://localhost:8080/items/" \
      -H "Content-Type: application/json" \
@@ -71,6 +84,20 @@
      -d '{
            "name": "新しいアイテム名"
          }'
+   ```
+   #### Windows Power Shellの場合
+   ```Power Shell
+   $headers = @{
+    "Content-Type" = "application/json"
+    "Authorization" = "Bearer 取得したアクセストークンをここに入れます"
+   }
+
+   $body = @{
+      "name" = "新しいアイテム名"
+   } | ConvertTo-Json
+
+   Invoke-RestMethod -Uri "http://localhost/items/" -Method Post -Headers $headers -Body $body
+   ```
 ## PostgreSQLへ接続
    ```bash
    docker exec -it fast_api-db-1 psql -U [DATABASE_USER] [DATABASE_NAME]

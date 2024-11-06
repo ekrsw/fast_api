@@ -50,8 +50,8 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None):
     return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=REFRESH_ALGORITHM)
 
 # トークンをデコードする関数
-def decode_token(token: str):
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+def decode_token(token: str, secret_key: str, algorithms: list):
+    return jwt.decode(token, secret_key, algorithms=algorithms)
 
 # ユーザー認証の関数
 def authenticate_user(db: Session, username: str, password: str):
@@ -68,7 +68,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = decode_token(token)
+        payload = decode_token(token, SECRET_KEY, [ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
