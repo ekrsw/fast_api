@@ -96,7 +96,7 @@
       "name" = "新しいアイテム名"
    } | ConvertTo-Json
 
-   Invoke-RestMethod -Uri "http://localhost/items/" -Method Post -Headers $headers -Body $body
+   Invoke-RestMethod -Uri "http://localhost:8080/items/" -Method Post -Headers $headers -Body $body
    ```
 ## PostgreSQLへ接続
    ```bash
