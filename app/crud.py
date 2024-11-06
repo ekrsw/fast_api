@@ -66,7 +66,7 @@ def get_items(db: Session, skip: int = 0, limit: int = 10) -> List[models.Item]:
     return db.query(models.Item).offset(skip).limit(limit).all()
 
 # 新しいアイテムを作成する関数
-def create_item(db: Session, item: schemas.ItemCreate):
+def create_item(db: Session, item: schemas.ItemCreate) -> models.Item:
     """
     新しいアイテムをデータベースに作成します。
 

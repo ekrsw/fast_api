@@ -27,7 +27,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 class BaseDatabase(Base):
-    __abstract__=True
+    """
+    全てのテーブルで共通するカラムを定義する抽象クラス
+    """
+    __abstract__ = True  # 抽象クラスとして設定し、直接テーブルとして使われないようにする
 
+    # レコードの作成日時を自動的に設定するカラム
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # レコードの更新日時を自動的に設定・更新するカラム
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
