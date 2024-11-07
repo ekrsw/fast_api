@@ -16,6 +16,21 @@ def get_user_by_username(db: Session, username: str) -> Optional[models.User]:
     """
     return db.query(models.User).filter(models.User.username == username).first()
 
+# 全ユーザーを取得する関数
+def get_users(db: Session, skip: int = 0, limit: int = 100) -> List[models.User]:
+    """
+    全てのユーザーを取得します。
+
+    Args:
+        db (Session): データベースセッション。
+        skip (int, optional): スキップするユーザー数。デフォルトは0。
+        limit (int, optional): 取得するユーザー数の上限。デフォルトは100。
+
+    Returns:
+        List[models.User]: ユーザーのリスト。
+    """
+    return db.query(models.User).offset(skip).limit(limit).all()
+
 # 新規ユーザーを作成する関数
 def create_user(db: Session, user: schemas.UserCreate, is_admin: bool = False) -> models.User:
     """
