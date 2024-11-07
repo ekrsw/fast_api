@@ -28,35 +28,25 @@ my_fastapi_project/
 ## app/auth.py
 ```app/auth.py
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Dict
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-import os
-from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+
+from .config import settings
 from . import schemas, crud
 from .dependencies import get_db
-
-# .env ファイルの読み込み
-load_dotenv()
 
 # パスワードハッシュの設定
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT 設定
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-REFRESH_SECRET_KEY = os.getenv("REFRESH_SECRET_KEY")
-REFRESH_ALGORITHM = os.getenv("REFRESH_ALGORITHM", "HS256")
-REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", 1440))
-
 # OAuth2 パスワード認証を設定
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-# パスワードを検証する関数
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     平文のパスワードとハッシュ化されたパスワードを比較し、一致するか検証します。
@@ -70,7 +60,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     return pwd_context.verify(plain_password, hashed_password)
 
-# パスワードをハッシュ化する関数
+
 def get_password_hash(password: str) -> str:
     """
     パスワードをハッシュ化して保存用に変換します。
@@ -83,56 +73,96 @@ def get_password_hash(password: str) -> str:
     """
     return pwd_context.hash(password)
 
-# アクセストークンを作成する関数
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+
+def create_jwt_token(
+        data: Dict[str, str],
+        secret_key: str,
+        algorithm: str,
+        expires_delta: Optional[timedelta] = None
+        ) -> str:
     """
-    アクセストークンを作成し、JWT形式でエンコードします。
+    JWTトークンを作成し、エンコードします。
 
     Args:
-        data (dict): トークンに含めるペイロードデータ。
+        data (Dict[str, str]): トークンに含めるペイロードデータ。
+        secret_key (str): JWTの秘密鍵。
+        algorithm (str): JWTの署名アルゴリズム。
+        expires_delta (Optional[timedelta]): トークンの有効期限。
+
+    Returns:
+        str: JWT形式のトークン。
+    """
+    to_encode = data.copy()
+    if expires_delta is None:
+        # デフォルトの有効期限を15分に設定
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    else:
+        expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, secret_key, algorithm=algorithm)
+
+
+def create_access_token(data: Dict[str, str], expires_delta: Optional[timedelta] = None) -> str:
+    """
+    アクセストークンを作成します。
+
+    Args:
+        data (Dict[str, str]): トークンに含めるペイロードデータ。
         expires_delta (Optional[timedelta]): トークンの有効期限。
 
     Returns:
         str: JWT形式のアクセストークン。
     """
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(minutes=15))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    if expires_delta is None:
+        expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
+    return create_jwt_token(
+        data,
+        secret_key=settings.secret_key,
+        algorithm=settings.algorithm,
+        expires_delta=expires_delta
+    )
 
-# リフレッシュトークンを作成する関数
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+
+def create_refresh_token(
+        data: Dict[str, str],
+        expires_delta: Optional[timedelta] = None
+        ) -> str:
     """
-    リフレッシュトークンを作成し、JWT形式でエンコードします。
+    リフレッシュトークンを作成します。
 
     Args:
-        data (dict): トークンに含めるペイロードデータ。
+        data (Dict[str, str]): トークンに含めるペイロードデータ。
         expires_delta (Optional[timedelta]): トークンの有効期限。
 
     Returns:
         str: JWT形式のリフレッシュトークン。
     """
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(days=1))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=REFRESH_ALGORITHM)
+    if expires_delta is None:
+        # デフォルトの有効期限を1日に設定
+        expires_delta = timedelta(days=1)
+    return create_jwt_token(
+        data,
+        secret_key=settings.refresh_secret_key,
+        algorithm=settings.refresh_algorithm,
+        expires_delta=expires_delta
+    )
 
-# トークンをデコードする関数
-def decode_token(token: str, secret_key: str, algorithms: list) -> dict:
+
+def decode_token(token: str, secret_key: str, algorithms: List[str]) -> Dict:
     """
-    トークンをデコードし、含まれるペイロードデータを取得します。
+    トークンをデコードし、ペイロードデータを取得します。
 
     Args:
         token (str): デコードするトークン。
         secret_key (str): デコードに使用する秘密鍵。
-        algorithms (list): トークンのデコードに使用するアルゴリズム。
+        algorithms (List[str]): トークンのデコードに使用するアルゴリズム。
 
     Returns:
-        dict: トークンに含まれるペイロードデータ。
+        Dict: トークンに含まれるペイロードデータ。
     """
     return jwt.decode(token, secret_key, algorithms=algorithms)
 
-# ユーザー認証の関数
+
 def authenticate_user(db: Session, username: str, password: str) -> Optional[schemas.User]:
     """
     ユーザー名とパスワードでユーザーを認証し、有効な場合はユーザー情報を返します。
@@ -147,11 +177,14 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[sch
     """
     user = crud.get_user_by_username(db, username)
     if not user or not verify_password(password, user.hashed_password):
-        return False
+        return None
     return user
 
-# 現在のユーザーの取得
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> schemas.User:
+
+def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db)
+        ) -> schemas.User:
     """
     JWTトークンから現在のユーザーを取得します。トークンが無効な場合は例外を発生させます。
 
@@ -171,19 +204,20 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = decode_token(token, SECRET_KEY, [ALGORITHM])
-        username: str = payload.get("sub")
+        payload = decode_token(token, settings.secret_key, [settings.algorithm])
+        username: Optional[str] = payload.get("sub")
         if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+
     user = crud.get_user_by_username(db, username=username)
     if user is None:
         raise credentials_exception
     return user
 
-# リフレッシュトークンの取得（ヘッダーから取得）
-def get_refresh_token(refresh_token: str = Header(...)) -> str:
+
+def get_refresh_token(refresh_token: str = Header(..., alias="Refresh-Token")) -> str:
     """
     リフレッシュトークンをヘッダーから取得します。
 
@@ -194,13 +228,45 @@ def get_refresh_token(refresh_token: str = Header(...)) -> str:
         str: リフレッシュトークン。
     """
     return refresh_token
+```
+## config.py
+```app/config.py
+# app/config.py
+from pydantic_settings import BaseSettings
+from pydantic import Field
+from typing import Any
 
-# JWT エラークラスのラッピング
-class JWTError(Exception):
-    """
-    JWT関連のエラーを扱うための例外クラス。
-    """
-    pass
+class Settings(BaseSettings):
+    # Database Configuration
+    database_host: str = Field("db", env="DATABASE_HOST")
+    database_port: int = Field(5432, env="DATABASE_PORT")
+    database_user: str = Field("admin", env="DATABASE_USER")
+    database_password: str = Field("my_database_password", env="DATABASE_PASSWORD")
+    database_name: str = Field("my_database", env="DATABASE_NAME")
+    
+    # API Configuration
+    api_host: str = Field("0.0.0.0", env="API_HOST")
+    api_port: int = Field(8000, env="API_PORT")
+    
+    # Nginx Configuration
+    nginx_port: int = Field(8080, env="NGINX_PORT")
+    
+    # JWT Configuration
+    secret_key: str = Field(..., env="SECRET_KEY")
+    algorithm: str = Field("HS256", env="ALGORITHM")
+    access_token_expire_minutes: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    refresh_algorithm: str = Field("HS256", env="REFRESH_ALGORITHM")
+    refresh_secret_key: str = Field(..., env="REFRESH_SECRET_KEY")
+    refresh_token_expire_minutes: int = Field(1440, env="REFRESH_TOKEN_EXPIRE_MINUTES")
+    
+    # Initial Admin User
+    initial_admin_username: str = Field(..., env="INITIAL_ADMIN_USERNAME")
+    initial_admin_password: str = Field(..., env="INITIAL_ADMIN_PASSWORD")
+    
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
 ```
 ## app/create_admin.py
 ```app/create_admin.py
@@ -389,44 +455,21 @@ def delete_item(db: Session, item_id: int) -> Optional[models.Item]:
 ```
 ## app/database.py
 ```app/database.py
-from sqlalchemy import Column, create_engine, DateTime, func
+from sqlalchemy import create_engine, Column, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
+from .config import settings
 
-# .env ファイルの読み込み
-load_dotenv()
+DATABASE_URL = f"postgresql://{settings.database_user}:{settings.database_password}@{settings.database_host}:{settings.database_port}/{settings.database_name}"
 
-# データベース接続設定を環境変数から取得し、デフォルト値を指定
-DATABASE_HOST = os.getenv("DATABASE_HOST", "db")  # ホスト名
-DATABASE_PORT = os.getenv("DATABASE_PORT", "5432")  # ポート番号
-DATABASE_USER = os.getenv("DATABASE_USER", "postgres")  # ユーザー名
-DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD", "postgres")  # パスワード
-DATABASE_NAME = os.getenv("DATABASE_NAME", "postgres")  # データベース名
-
-# データベース接続URLを生成
-DATABASE_URL = f"postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
-
-# SQLAlchemyエンジンを作成して、データベース接続を管理
-engine = create_engine(DATABASE_URL)
-
-# セッション作成用のクラスを定義（自動コミットや自動フラッシュは無効）
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 基本のマッピングクラスを作成するためのベースクラスを生成
 Base = declarative_base()
 
 class BaseDatabase(Base):
-    """
-    全てのテーブルで共通するカラムを定義する抽象クラス
-    """
-    __abstract__ = True  # 抽象クラスとして設定し、直接テーブルとして使われないようにする
-
-    # レコードの作成日時を自動的に設定するカラム
+    __abstract__ = True
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    
-    # レコードの更新日時を自動的に設定・更新するカラム
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 ```
 ## app/main.py
