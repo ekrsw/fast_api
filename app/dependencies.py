@@ -1,16 +1,7 @@
-from fastapi import Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from .database import SessionLocal
+from .database import AsyncSessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends
 
-def get_db() -> Session:
-    """
-    データベースセッションを取得するための依存関係。
-
-    Yields:
-        Session: データベースセッションオブジェクト。
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db() -> AsyncSession:
+    async with AsyncSessionLocal() as session:
+        yield session

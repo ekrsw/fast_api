@@ -1,37 +1,31 @@
-from sqlalchemy.orm import Session
+import os
+import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
 from . import models, schemas, crud, auth, database
-from .config import settings
+from dotenv import load_dotenv
 
+load_dotenv()
 
-# 初期管理者アカウントを作成する関数
-def create_initial_admin() -> None:
-    """
-    初期管理者アカウントを作成します。
-    環境変数からユーザー名とパスワードを取得し、既存の管理者がいない場合のみ新たに作成します。
-    """
-    db = database.SessionLocal()
-    username = settings.initial_admin_username
-    password = settings.initial_admin_password
+async def create_initial_admin() -> None:
+    async with database.AsyncSessionLocal() as db:
+        username = os.getenv("INITIAL_ADMIN_USERNAME")
+        password = os.getenv("INITIAL_ADMIN_PASSWORD")
 
-    # ユーザー名やパスワードが設定されていない場合はエラーメッセージを表示し終了
-    if not username or not password:
-        print("INITIAL_ADMIN_USERNAME and INITIAL_ADMIN_PASSWORD must be set in .env")
-        return
+        if not username or not password:
+            print("INITIAL_ADMIN_USERNAME and INITIAL_ADMIN_PASSWORD must be set in .env")
+            return
 
-    # 既に管理者が存在するか確認
-    existing_admin = crud.get_user_by_username(db, username=username)
-    if existing_admin:
-        print("Admin user already exists.")
-        return
+        existing_admin = await crud.get_user_by_username(db, username=username)
+        if existing_admin:
+            print("Admin user already exists.")
+            return
 
-    # 管理者ユーザーを作成
-    admin_user = crud.create_user(
-        db,
-        schemas.UserCreate(username=username, password=password),
-        is_admin=True
-    )
-    print(f"Admin user created: {admin_user.username}")
+        admin_user = await crud.create_user(
+            db,
+            schemas.UserCreate(username=username, password=password),
+            is_admin=True
+        )
+        print(f"Admin user created: {admin_user.username}")
 
-# スクリプトが直接実行された場合、create_initial_admin関数を呼び出して管理者を作成
 if __name__ == "__main__":
-    create_initial_admin()
+    asyncio.run(create_initial_admin())
