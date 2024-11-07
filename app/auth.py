@@ -2,27 +2,23 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-import os
-from dotenv import load_dotenv
+from .config import settings
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from . import schemas, crud
 from .dependencies import get_db
 
-# .env ファイルの読み込み
-load_dotenv()
-
 # パスワードハッシュの設定
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT 設定
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
-REFRESH_SECRET_KEY = os.getenv("REFRESH_SECRET_KEY")
-REFRESH_ALGORITHM = os.getenv("REFRESH_ALGORITHM", "HS256")
-REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", 1440))
+SECRET_KEY = settings.secret_key
+ALGORITHM = settings.algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
+REFRESH_SECRET_KEY = settings.refresh_secret_key
+REFRESH_ALGORITHM = settings.refresh_algorithm
+REFRESH_TOKEN_EXPIRE_MINUTES = settings.refresh_token_expire_minutes
 
 # OAuth2 パスワード認証を設定
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
@@ -69,7 +65,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(minutes=15))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
 
 # リフレッシュトークンを作成する関数
 def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -86,7 +82,7 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(days=1))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=REFRESH_ALGORITHM)
+    return jwt.encode(to_encode, settings.refresh_secret_key, algorithm=settings.refresh_algorithm)
 
 # トークンをデコードする関数
 def decode_token(token: str, secret_key: str, algorithms: list) -> dict:
@@ -142,7 +138,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = decode_token(token, SECRET_KEY, [ALGORITHM])
+        payload = decode_token(token, settings.secret_key, [settings.algorithm])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception

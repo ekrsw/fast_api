@@ -1,10 +1,7 @@
-import os
 from sqlalchemy.orm import Session
 from . import models, schemas, crud, auth, database
-from dotenv import load_dotenv
+from .config import settings
 
-# .env ファイルの読み込み
-load_dotenv()
 
 # 初期管理者アカウントを作成する関数
 def create_initial_admin() -> None:
@@ -13,8 +10,8 @@ def create_initial_admin() -> None:
     環境変数からユーザー名とパスワードを取得し、既存の管理者がいない場合のみ新たに作成します。
     """
     db = database.SessionLocal()
-    username = os.getenv("INITIAL_ADMIN_USERNAME")
-    password = os.getenv("INITIAL_ADMIN_PASSWORD")
+    username = settings.initial_admin_username
+    password = settings.initial_admin_password
 
     # ユーザー名やパスワードが設定されていない場合はエラーメッセージを表示し終了
     if not username or not password:

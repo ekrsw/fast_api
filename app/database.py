@@ -1,39 +1,16 @@
-from sqlalchemy import Column, create_engine, DateTime, func
+from sqlalchemy import create_engine, Column, DateTime, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
-from dotenv import load_dotenv
+from .config import settings
 
-# .env ファイルの読み込み
-load_dotenv()
+DATABASE_URL = f"postgresql://{settings.database_user}:{settings.database_password}@{settings.database_host}:{settings.database_port}/{settings.database_name}"
 
-# データベース接続設定を環境変数から取得し、デフォルト値を指定
-DATABASE_HOST = os.getenv("DATABASE_HOST", "db")  # ホスト名
-DATABASE_PORT = os.getenv("DATABASE_PORT", "5432")  # ポート番号
-DATABASE_USER = os.getenv("DATABASE_USER", "postgres")  # ユーザー名
-DATABASE_PASSWORD = os.getenv("DATABASE_PASSWORD", "postgres")  # パスワード
-DATABASE_NAME = os.getenv("DATABASE_NAME", "postgres")  # データベース名
-
-# データベース接続URLを生成
-DATABASE_URL = f"postgresql://{DATABASE_USER}:{DATABASE_PASSWORD}@{DATABASE_HOST}:{DATABASE_PORT}/{DATABASE_NAME}"
-
-# SQLAlchemyエンジンを作成して、データベース接続を管理
-engine = create_engine(DATABASE_URL)
-
-# セッション作成用のクラスを定義（自動コミットや自動フラッシュは無効）
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 基本のマッピングクラスを作成するためのベースクラスを生成
 Base = declarative_base()
 
 class BaseDatabase(Base):
-    """
-    全てのテーブルで共通するカラムを定義する抽象クラス
-    """
-    __abstract__ = True  # 抽象クラスとして設定し、直接テーブルとして使われないようにする
-
-    # レコードの作成日時を自動的に設定するカラム
+    __abstract__ = True
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    
-    # レコードの更新日時を自動的に設定・更新するカラム
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
