@@ -14,6 +14,7 @@ my_fastapi_project/
 │   ├── create_admin.py
 │   ├── crud.py
 │   ├── database.py
+│   ├── dependencies.py
 │   ├── main.py
 │   ├── models.py
 │   └── schemas.py
