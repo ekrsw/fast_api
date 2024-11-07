@@ -10,6 +10,7 @@ my_fastapi_project/
 │   │   └── users.py
 │   ├── __init__.py
 │   ├── auth.py
+│   ├── config.py
 │   ├── create_admin.py
 │   ├── crud.py
 │   ├── database.py

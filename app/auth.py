@@ -1,29 +1,25 @@
+# auth.py
+
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List, Dict
+
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from .config import settings
 from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+
+from .config import settings
 from . import schemas, crud
 from .dependencies import get_db
 
 # パスワードハッシュの設定
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT 設定
-SECRET_KEY = settings.secret_key
-ALGORITHM = settings.algorithm
-ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
-REFRESH_SECRET_KEY = settings.refresh_secret_key
-REFRESH_ALGORITHM = settings.refresh_algorithm
-REFRESH_TOKEN_EXPIRE_MINUTES = settings.refresh_token_expire_minutes
-
 # OAuth2 パスワード認証を設定
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-# パスワードを検証する関数
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     平文のパスワードとハッシュ化されたパスワードを比較し、一致するか検証します。
@@ -37,7 +33,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     return pwd_context.verify(plain_password, hashed_password)
 
-# パスワードをハッシュ化する関数
+
 def get_password_hash(password: str) -> str:
     """
     パスワードをハッシュ化して保存用に変換します。
@@ -50,56 +46,96 @@ def get_password_hash(password: str) -> str:
     """
     return pwd_context.hash(password)
 
-# アクセストークンを作成する関数
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+
+def create_jwt_token(
+        data: Dict[str, str],
+        secret_key: str,
+        algorithm: str,
+        expires_delta: Optional[timedelta] = None
+        ) -> str:
     """
-    アクセストークンを作成し、JWT形式でエンコードします。
+    JWTトークンを作成し、エンコードします。
 
     Args:
-        data (dict): トークンに含めるペイロードデータ。
+        data (Dict[str, str]): トークンに含めるペイロードデータ。
+        secret_key (str): JWTの秘密鍵。
+        algorithm (str): JWTの署名アルゴリズム。
+        expires_delta (Optional[timedelta]): トークンの有効期限。
+
+    Returns:
+        str: JWT形式のトークン。
+    """
+    to_encode = data.copy()
+    if expires_delta is None:
+        # デフォルトの有効期限を15分に設定
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    else:
+        expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, secret_key, algorithm=algorithm)
+
+
+def create_access_token(data: Dict[str, str], expires_delta: Optional[timedelta] = None) -> str:
+    """
+    アクセストークンを作成します。
+
+    Args:
+        data (Dict[str, str]): トークンに含めるペイロードデータ。
         expires_delta (Optional[timedelta]): トークンの有効期限。
 
     Returns:
         str: JWT形式のアクセストークン。
     """
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(minutes=15))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
+    if expires_delta is None:
+        expires_delta = timedelta(minutes=settings.access_token_expire_minutes)
+    return create_jwt_token(
+        data,
+        secret_key=settings.secret_key,
+        algorithm=settings.algorithm,
+        expires_delta=expires_delta
+    )
 
-# リフレッシュトークンを作成する関数
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+
+def create_refresh_token(
+        data: Dict[str, str],
+        expires_delta: Optional[timedelta] = None
+        ) -> str:
     """
-    リフレッシュトークンを作成し、JWT形式でエンコードします。
+    リフレッシュトークンを作成します。
 
     Args:
-        data (dict): トークンに含めるペイロードデータ。
+        data (Dict[str, str]): トークンに含めるペイロードデータ。
         expires_delta (Optional[timedelta]): トークンの有効期限。
 
     Returns:
         str: JWT形式のリフレッシュトークン。
     """
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(days=1))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.refresh_secret_key, algorithm=settings.refresh_algorithm)
+    if expires_delta is None:
+        # デフォルトの有効期限を1日に設定
+        expires_delta = timedelta(days=1)
+    return create_jwt_token(
+        data,
+        secret_key=settings.refresh_secret_key,
+        algorithm=settings.refresh_algorithm,
+        expires_delta=expires_delta
+    )
 
-# トークンをデコードする関数
-def decode_token(token: str, secret_key: str, algorithms: list) -> dict:
+
+def decode_token(token: str, secret_key: str, algorithms: List[str]) -> Dict:
     """
-    トークンをデコードし、含まれるペイロードデータを取得します。
+    トークンをデコードし、ペイロードデータを取得します。
 
     Args:
         token (str): デコードするトークン。
         secret_key (str): デコードに使用する秘密鍵。
-        algorithms (list): トークンのデコードに使用するアルゴリズム。
+        algorithms (List[str]): トークンのデコードに使用するアルゴリズム。
 
     Returns:
-        dict: トークンに含まれるペイロードデータ。
+        Dict: トークンに含まれるペイロードデータ。
     """
     return jwt.decode(token, secret_key, algorithms=algorithms)
 
-# ユーザー認証の関数
+
 def authenticate_user(db: Session, username: str, password: str) -> Optional[schemas.User]:
     """
     ユーザー名とパスワードでユーザーを認証し、有効な場合はユーザー情報を返します。
@@ -114,11 +150,14 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[sch
     """
     user = crud.get_user_by_username(db, username)
     if not user or not verify_password(password, user.hashed_password):
-        return False
+        return None
     return user
 
-# 現在のユーザーの取得
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> schemas.User:
+
+def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db)
+        ) -> schemas.User:
     """
     JWTトークンから現在のユーザーを取得します。トークンが無効な場合は例外を発生させます。
 
@@ -139,18 +178,19 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     )
     try:
         payload = decode_token(token, settings.secret_key, [settings.algorithm])
-        username: str = payload.get("sub")
+        username: Optional[str] = payload.get("sub")
         if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+
     user = crud.get_user_by_username(db, username=username)
     if user is None:
         raise credentials_exception
     return user
 
-# リフレッシュトークンの取得（ヘッダーから取得）
-def get_refresh_token(refresh_token: str = Header(...)) -> str:
+
+def get_refresh_token(refresh_token: str = Header(..., alias="Refresh-Token")) -> str:
     """
     リフレッシュトークンをヘッダーから取得します。
 
@@ -161,10 +201,3 @@ def get_refresh_token(refresh_token: str = Header(...)) -> str:
         str: リフレッシュトークン。
     """
     return refresh_token
-
-# JWT エラークラスのラッピング
-class JWTError(Exception):
-    """
-    JWT関連のエラーを扱うための例外クラス。
-    """
-    pass
