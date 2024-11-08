@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional
 
@@ -80,6 +80,36 @@ class User(BaseModel):
 
     class Config:
         from_attributes = True  # ORM モードを有効にして属性から値を取得できるようにする
+
+
+class UserUpdate(BaseModel):
+    """
+    ユーザー更新時のモデル
+    
+    Attributes
+    ----------
+    username : Optional[str]
+        更新後のユーザー名。省略可能。
+    password : Optional[str]
+        更新後のパスワード。省略可能。
+    is_admin : Optional[bool]
+        管理者権限フラグ。省略可能。
+    """
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    password: Optional[str] = Field(None, min_length=6)
+    is_admin: Optional[bool] = None
+
+    @validator('username')
+    def username_must_not_be_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Username must not be empty')
+        return v
+
+    @validator('password')
+    def password_must_not_be_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Password must not be empty')
+        return v
 
 
 class Token(BaseModel):

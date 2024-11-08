@@ -413,7 +413,7 @@ from sqlalchemy import update, delete
 from . import models, schemas, auth
 from typing import Optional, List
 
-
+# ユーザー名でユーザーを取得する関数
 async def get_user_by_username(db: AsyncSession, username: str) -> Optional[models.User]:
     """
     ユーザー名でユーザーを取得します。
@@ -423,56 +423,56 @@ async def get_user_by_username(db: AsyncSession, username: str) -> Optional[mode
     db : AsyncSession
         データベースセッション。
     username : str
-        取得対象のユーザー名。
+        取得するユーザーのユーザー名。
 
     Returns
     -------
     Optional[models.User]
-        指定されたユーザー名に一致するユーザーオブジェクト。存在しない場合はNone。
+        見つかった場合はユーザーオブジェクト、存在しない場合はNone。
     """
     result = await db.execute(select(models.User).filter(models.User.username == username))
     return result.scalars().first()
 
-
+# 全ユーザーを取得する関数
 async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100) -> List[models.User]:
     """
-    全ユーザーを取得します。
+    ユーザーのリストを取得します（ページング可能）。
 
     Parameters
     ----------
     db : AsyncSession
         データベースセッション。
     skip : int, optional
-        スキップするレコード数。デフォルトは0。
+        取得をスキップするレコード数（デフォルトは0）。
     limit : int, optional
-        取得するレコード数の上限。デフォルトは100。
+        取得する最大レコード数（デフォルトは100）。
 
     Returns
     -------
     List[models.User]
-        取得したユーザーのリスト。
+        ユーザーオブジェクトのリスト。
     """
     result = await db.execute(select(models.User).offset(skip).limit(limit))
     return result.scalars().all()
 
-
+# 新規ユーザーを作成する関数
 async def create_user(db: AsyncSession, user: schemas.UserCreate, is_admin: bool = False) -> models.User:
     """
-    新規ユーザーを作成します。
+    新しいユーザーを作成します。
 
     Parameters
     ----------
     db : AsyncSession
         データベースセッション。
     user : schemas.UserCreate
-        作成するユーザーの情報を含むスキーマ。
+        新規ユーザーの情報を含むスキーマ。
     is_admin : bool, optional
-        作成するユーザーが管理者かどうか。デフォルトはFalse。
+        ユーザーに管理者権限を付与するか（デフォルトはFalse）。
 
     Returns
     -------
     models.User
-        作成されたユーザーオブジェクト。
+        作成された新しいユーザーオブジェクト。
     """
     hashed_password = auth.get_password_hash(user.password)
     db_user = models.User(username=user.username, hashed_password=hashed_password, is_admin=is_admin)
@@ -481,7 +481,77 @@ async def create_user(db: AsyncSession, user: schemas.UserCreate, is_admin: bool
     await db.refresh(db_user)
     return db_user
 
+# ユーザー情報を更新する関数
+async def update_user(db: AsyncSession, username: str, user_update: schemas.UserUpdate) -> Optional[models.User]:
+    """
+    ユーザー情報を更新します。
 
+    Parameters
+    ----------
+    db : AsyncSession
+        データベースセッション。
+    username : str
+        更新対象のユーザー名。
+    user_update : schemas.UserUpdate
+        更新するユーザー情報を含むスキーマ。
+
+    Returns
+    -------
+    Optional[models.User]
+        更新されたユーザーオブジェクト。ユーザーが存在しない場合はNone。
+    """
+    result = await db.execute(select(models.User).filter(models.User.username == username))
+    db_user = result.scalars().first()
+    if db_user is None:
+        return None
+    
+    if user_update.username:
+        db_user.username = user_update.username
+    if user_update.password:
+        db_user.hashed_password = auth.get_password_hash(user_update.password)
+    if user_update.is_admin is not None:
+        db_user.is_admin = user_update.is_admin
+    
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+# app/crud.py
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
+from . import models, schemas
+
+# ユーザーを削除する関数
+async def delete_user(db: AsyncSession, username: str) -> Optional[models.User]:
+    """
+    ユーザーを削除します。
+
+    Parameters
+    ----------
+    db : AsyncSession
+        データベースセッション。
+    username : str
+        削除対象のユーザー名。
+
+    Returns
+    -------
+    Optional[models.User]
+        削除されたユーザーオブジェクト。存在しない場合はNone。
+    """
+    result = await db.execute(select(models.User).filter(models.User.username == username))
+    db_user = result.scalars().first()
+    if db_user is None:
+        return None
+
+    await db.delete(db_user)
+    await db.commit()
+    return db_user
+
+
+# アイテムIDで特定のアイテムを取得する関数
 async def get_item(db: AsyncSession, item_id: int) -> Optional[models.Item]:
     """
     アイテムIDで特定のアイテムを取得します。
@@ -491,39 +561,39 @@ async def get_item(db: AsyncSession, item_id: int) -> Optional[models.Item]:
     db : AsyncSession
         データベースセッション。
     item_id : int
-        取得対象のアイテムID。
+        取得するアイテムのID。
 
     Returns
     -------
     Optional[models.Item]
-        指定されたIDに一致するアイテムオブジェクト。存在しない場合はNone。
+        見つかった場合はアイテムオブジェクト、存在しない場合はNone。
     """
     result = await db.execute(select(models.Item).filter(models.Item.id == item_id))
     return result.scalars().first()
 
-
+# 複数のアイテムを取得する関数
 async def get_items(db: AsyncSession, skip: int = 0, limit: int = 10) -> List[models.Item]:
     """
-    複数のアイテムを取得します。
+    アイテムのリストを取得します（ページング可能）。
 
     Parameters
     ----------
     db : AsyncSession
         データベースセッション。
     skip : int, optional
-        スキップするレコード数。デフォルトは0。
+        取得をスキップするレコード数（デフォルトは0）。
     limit : int, optional
-        取得するレコード数の上限。デフォルトは10。
+        取得する最大レコード数（デフォルトは10）。
 
     Returns
     -------
     List[models.Item]
-        取得したアイテムのリスト。
+        アイテムオブジェクトのリスト。
     """
     result = await db.execute(select(models.Item).offset(skip).limit(limit))
     return result.scalars().all()
 
-
+# 新しいアイテムを作成する関数
 async def create_item(db: AsyncSession, item: schemas.ItemCreate) -> models.Item:
     """
     新しいアイテムを作成します。
@@ -533,12 +603,12 @@ async def create_item(db: AsyncSession, item: schemas.ItemCreate) -> models.Item
     db : AsyncSession
         データベースセッション。
     item : schemas.ItemCreate
-        作成するアイテムの情報を含むスキーマ。
+        新規アイテムの情報を含むスキーマ。
 
     Returns
     -------
     models.Item
-        作成されたアイテムオブジェクト。
+        作成された新しいアイテムオブジェクト。
     """
     db_item = models.Item(name=item.name)
     db.add(db_item)
@@ -546,24 +616,24 @@ async def create_item(db: AsyncSession, item: schemas.ItemCreate) -> models.Item
     await db.refresh(db_item)
     return db_item
 
-
+# アイテムを更新する関数
 async def update_item(db: AsyncSession, item_id: int, item: schemas.ItemCreate) -> Optional[models.Item]:
     """
-    アイテムを更新します。
+    アイテムIDでアイテムを更新します。
 
     Parameters
     ----------
     db : AsyncSession
         データベースセッション。
     item_id : int
-        更新対象のアイテムID。
+        更新するアイテムのID。
     item : schemas.ItemCreate
-        更新後のアイテム情報を含むスキーマ。
+        更新するアイテム情報を含むスキーマ。
 
     Returns
     -------
     Optional[models.Item]
-        更新されたアイテムオブジェクト。存在しない場合はNone。
+        更新されたアイテムオブジェクト。アイテムが存在しない場合はNone。
     """
     result = await db.execute(select(models.Item).filter(models.Item.id == item_id))
     db_item = result.scalars().first()
@@ -574,22 +644,22 @@ async def update_item(db: AsyncSession, item_id: int, item: schemas.ItemCreate) 
     await db.refresh(db_item)
     return db_item
 
-
+# アイテムを削除する関数
 async def delete_item(db: AsyncSession, item_id: int) -> Optional[models.Item]:
     """
-    アイテムを削除します。
+    アイテムIDでアイテムを削除します。
 
     Parameters
     ----------
     db : AsyncSession
         データベースセッション。
     item_id : int
-        削除対象のアイテムID。
+        削除するアイテムのID。
 
     Returns
     -------
     Optional[models.Item]
-        削除されたアイテムオブジェクト。存在しない場合はNone。
+        削除されたアイテムオブジェクト。アイテムが存在しない場合はNone。
     """
     result = await db.execute(select(models.Item).filter(models.Item.id == item_id))
     db_item = result.scalars().first()
@@ -750,7 +820,7 @@ class Item(BaseDatabase):
 ```
 ## app/schemas.py
 ```app/schemas.py
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional
 
@@ -832,6 +902,36 @@ class User(BaseModel):
 
     class Config:
         from_attributes = True  # ORM モードを有効にして属性から値を取得できるようにする
+
+
+class UserUpdate(BaseModel):
+    """
+    ユーザー更新時のモデル
+    
+    Attributes
+    ----------
+    username : Optional[str]
+        更新後のユーザー名。省略可能。
+    password : Optional[str]
+        更新後のパスワード。省略可能。
+    is_admin : Optional[bool]
+        管理者権限フラグ。省略可能。
+    """
+    username: Optional[str] = Field(None, min_length=3, max_length=50)
+    password: Optional[str] = Field(None, min_length=6)
+    is_admin: Optional[bool] = None
+
+    @validator('username')
+    def username_must_not_be_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Username must not be empty')
+        return v
+
+    @validator('password')
+    def password_must_not_be_empty(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError('Password must not be empty')
+        return v
 
 
 class Token(BaseModel):
@@ -979,7 +1079,7 @@ async def refresh_access_token(
         "token_type": "bearer"
     }
 ```
-## app/routers/items
+## app/routers/items.py
 ```app/routers/items.py
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
@@ -1181,7 +1281,7 @@ async def delete_item(
 ```
 ## app/routers/users.py
 ```app/routers/users.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 from .. import schemas, crud
@@ -1300,6 +1400,130 @@ async def read_users(
     # 指定された範囲でユーザーを取得して返す
     users = await crud.get_users(db, skip=skip, limit=limit)
     return users
+
+@router.post("/add", response_model=schemas.User)
+async def add_user(
+        user: schemas.UserCreate,
+        db: AsyncSession = Depends(get_db),
+        current_user: schemas.User = Depends(get_current_user)
+    ) -> schemas.User:
+    """
+    管理者が新しいユーザーを追加します。
+    
+    このエンドポイントは、認証された管理者ユーザーのみがアクセスできます。
+    提供されたユーザー情報を基に新しいユーザーをデータベースに作成します。
+    
+    Parameters
+    ----------
+    user : schemas.UserCreate
+        作成するユーザーの情報を含むスキーマ。
+    db : AsyncSession
+        データベースセッション。依存関係として提供されます。
+    current_user : auth_schemas.User
+        現在認証されているユーザー。依存関係として提供されます。
+    
+    Returns
+    -------
+    schemas.User
+        作成されたユーザーの詳細を含むレスポンスモデル。
+    
+    Raises
+    ------
+    HTTPException
+        認証されたユーザーが管理者でない場合に403 Forbiddenエラーを返します。
+        ユーザー名が既に登録されている場合に400 Bad Requestエラーを返します。
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add users")
+    
+    db_user = await crud.get_user_by_username(db, username=user.username)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    return await crud.create_user(db=db, user=user)
+
+@router.put("/{username}", response_model=schemas.User)
+async def update_user_info(
+        username: str,
+        user_update: schemas.UserUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user: schemas.User = Depends(get_current_user)
+    ) -> schemas.User:
+    """
+    ユーザー情報を更新します。
+    
+    このエンドポイントは、認証されたユーザー自身または管理者のみがアクセスできます。
+    提供されたユーザー情報を基に指定されたユーザーを更新します。
+    
+    Parameters
+    ----------
+    username : str
+        更新対象のユーザー名。
+    user_update : schemas.UserUpdate
+        更新するユーザー情報を含むスキーマ。
+    db : AsyncSession
+        データベースセッション。依存関係として提供されます。
+    current_user : auth_schemas.User
+        現在認証されているユーザー。依存関係として提供されます。
+    
+    Returns
+    -------
+    schemas.User
+        更新されたユーザーの詳細を含むレスポンスモデル。
+    
+    Raises
+    ------
+    HTTPException
+        認証されたユーザーが対象ユーザー自身でないか、管理者でない場合に403 Forbiddenエラーを返します。
+        ユーザーが存在しない場合に404 Not Foundエラーを返します。
+    """
+    if current_user.username != username and not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this user")
+    
+    updated_user = await crud.update_user(db, username=username, user_update=user_update)
+    if updated_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return updated_user
+
+@router.delete("/{username}", response_model=dict)
+async def delete_user(
+        username: str,
+        db: AsyncSession = Depends(get_db),
+        current_user: schemas.User = Depends(get_current_user)
+    ) -> dict:
+    """
+    ユーザーを削除します（管理者のみ）。
+
+    このエンドポイントは、指定されたユーザー名のユーザーを削除します。
+    認証された管理者ユーザーのみがアクセスできます。
+
+    Parameters
+    ----------
+    username : str
+        削除対象のユーザー名。
+    db : AsyncSession
+        データベースセッション。依存関係として提供されます。
+    current_user : schemas.User
+        現在認証されているユーザー。依存関係として提供されます。
+
+    Returns
+    -------
+    dict
+        削除の詳細を含むレスポンス。例: {"detail": "User 'username' deleted"}
+
+    Raises
+    ------
+    HTTPException
+        認証されたユーザーが管理者でない場合に403 Forbiddenエラーを返します。
+        ユーザーが存在しない場合に404 Not Foundエラーを返します。
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete users")
+
+    deleted_user = await crud.delete_user(db, username=username)
+    if deleted_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"detail": f"User '{username}' deleted"}
 ```
 ## docker/Dockerfile
 ```docker/Dockerfile
