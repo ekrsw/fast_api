@@ -106,7 +106,7 @@ my_fastapi_project/
 3. **初期管理者ユーザーの作成**
    - APIサーバーが起動した後、`create_admin.py` スクリプトを実行して初期管理者ユーザーをデータベースに作成。
      ```bash
-     docker-compose exec api python app/create_admin.py
+     docker-compose exec api python -m app.create_admin
      ```
 
 4. **APIの利用**
