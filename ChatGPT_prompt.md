@@ -22,7 +22,7 @@ my_fastapi_project/
 │   ├── Dockerfile
 │   └── nginx.conf
 ├── tests/
-│   ├── conftest.pu
+│   ├── conftest.py
 │   ├── test_auth.py
 │   └── test_create_admin.py
 ├── docker-compose.yml
