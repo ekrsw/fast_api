@@ -824,7 +824,7 @@ class Item(BaseDatabase):
 ```
 ## app/schemas.py
 ```app/schemas.py
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, constr, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -838,8 +838,17 @@ class ItemBase(BaseModel):
     name : str
         アイテムの名前。
     """
-    name: str  # アイテムの名前
+    
+    name: str # カスタムバリデーションで検証
+    @field_validator('name')
+    def name_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name must not be empty')
+        return v
 
+    class Config:
+        from_attributes = True
+        model_config = ConfigDict()
 
 class ItemCreate(ItemBase):
     """
@@ -870,7 +879,7 @@ class Item(ItemBase):
 
     class Config:
         from_attributes = True  # ORM モードを有効にして属性から値を取得できるようにする
-
+        model_config = ConfigDict()
 
 class UserCreate(BaseModel):
     """
@@ -879,12 +888,32 @@ class UserCreate(BaseModel):
     Attributes
     ----------
     username : str
-        ユーザー名。
+        ユーザー名。3文字以上、50文字以下
     password : str
-        パスワード。
+        パスワード。6文字以上
     """
-    username: str  # ユーザー名
-    password: str  # パスワード
+    username: str
+    password: str
+
+    @field_validator('username')
+    def username_valid(cls, v):
+        if not v.strip():
+            raise ValueError('Username must not be empty')
+        if len(v) < 3 or len(v) > 50:
+            raise ValueError('Username must be between 3 and 50 characters')
+        return v
+
+    @field_validator('password')
+    def password_valid(cls, v):
+        if not v.strip():
+            raise ValueError('Password must not be empty')
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters long')
+        return v
+
+    class Config:
+        from_attributes = True
+        model_config = ConfigDict()
 
 
 class User(BaseModel):
@@ -921,23 +950,31 @@ class UserUpdate(BaseModel):
     is_admin : Optional[bool]
         管理者権限フラグ。省略可能。
     """
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
-    password: Optional[str] = Field(None, min_length=6)
+    username: Optional[str] = None
+    password: Optional[str] = None
     is_admin: Optional[bool] = None
 
     @field_validator('username')
-    def username_must_not_be_empty(cls, v):
-        if v is not None and not v.strip():
-            raise ValueError('Username must not be empty')
+    def username_valid(cls, v):
+        if v is not None:
+            if not v.strip():
+                raise ValueError('Username must not be empty')
+            if len(v) < 3 or len(v) > 50:
+                raise ValueError('Username must be between 3 and 50 characters')
         return v
 
     @field_validator('password')
-    def password_must_not_be_empty(cls, v):
-        if v is not None and not v.strip():
-            raise ValueError('Password must not be empty')
+    def password_valid(cls, v):
+        if v is not None:
+            if not v.strip():
+                raise ValueError('Password must not be empty')
+            if len(v) < 6:
+                raise ValueError('Password must be at least 6 characters long')
         return v
 
-    model_config = ConfigDict()
+    class Config:
+        from_attributes = True
+        model_config = ConfigDict()
 
 
 class Token(BaseModel):
@@ -956,6 +993,10 @@ class Token(BaseModel):
     access_token: str  # JWT アクセストークン
     token_type: str  # トークンのタイプ（例: "bearer"）
     refresh_token: Optional[str] = None  # JWT リフレッシュトークン
+
+    class Config:
+        from_attributes = True
+        model_config = ConfigDict()
 ```
 ## app/routers/auth.py
 ```app/routers/auth.py

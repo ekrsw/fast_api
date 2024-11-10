@@ -1,10 +1,9 @@
-# tests/test_schemas.py
 import pytest
 from pydantic import ValidationError
 from datetime import datetime
-from typing import Optional
 
 from app import schemas
+
 
 @pytest.mark.asyncio
 async def test_item_base_valid():
@@ -43,8 +42,7 @@ async def test_item_create_invalid_empty_name():
     """
     with pytest.raises(ValidationError) as exc_info:
         schemas.ItemCreate(name="")
-    assert "name" in str(exc_info.value)
-    assert "ensure this value has at least 1 characters" in str(exc_info.value)
+    assert "Name must not be empty" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -94,8 +92,7 @@ async def test_user_create_invalid_short_password():
     """
     with pytest.raises(ValidationError) as exc_info:
         schemas.UserCreate(username="testuser", password="123")
-    assert "password" in str(exc_info.value)
-    assert "ensure this value has at least 6 characters" in str(exc_info.value)
+    assert "Password must be at least 6 characters long" in str(exc_info.value)
 
 
 @pytest.mark.asyncio

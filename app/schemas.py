@@ -13,9 +13,16 @@ class ItemBase(BaseModel):
         アイテムの名前。
     """
     
-    name: constr(min_length=1)  # 空文字を禁止
+    name: str # カスタムバリデーションで検証
+    @field_validator('name')
+    def name_must_not_be_empty(cls, v):
+        if not v.strip():
+            raise ValueError('Name must not be empty')
+        return v
+
     class Config:
         from_attributes = True
+        model_config = ConfigDict()
 
 class ItemCreate(ItemBase):
     """
@@ -46,7 +53,7 @@ class Item(ItemBase):
 
     class Config:
         from_attributes = True  # ORM モードを有効にして属性から値を取得できるようにする
-
+        model_config = ConfigDict()
 
 class UserCreate(BaseModel):
     """
@@ -59,8 +66,28 @@ class UserCreate(BaseModel):
     password : str
         パスワード。6文字以上
     """
-    username: constr(min_length=3, max_length=50)
-    password: constr(min_length=6)
+    username: str
+    password: str
+
+    @field_validator('username')
+    def username_valid(cls, v):
+        if not v.strip():
+            raise ValueError('Username must not be empty')
+        if len(v) < 3 or len(v) > 50:
+            raise ValueError('Username must be between 3 and 50 characters')
+        return v
+
+    @field_validator('password')
+    def password_valid(cls, v):
+        if not v.strip():
+            raise ValueError('Password must not be empty')
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters long')
+        return v
+
+    class Config:
+        from_attributes = True
+        model_config = ConfigDict()
 
 
 class User(BaseModel):
@@ -97,23 +124,31 @@ class UserUpdate(BaseModel):
     is_admin : Optional[bool]
         管理者権限フラグ。省略可能。
     """
-    username: Optional[constr(min_length=3, max_length=50)] = None
-    password: Optional[constr(min_length=6)] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
     is_admin: Optional[bool] = None
 
     @field_validator('username')
-    def username_must_not_be_empty(cls, v):
-        if v is not None and not v.strip():
-            raise ValueError('Username must not be empty')
+    def username_valid(cls, v):
+        if v is not None:
+            if not v.strip():
+                raise ValueError('Username must not be empty')
+            if len(v) < 3 or len(v) > 50:
+                raise ValueError('Username must be between 3 and 50 characters')
         return v
 
     @field_validator('password')
-    def password_must_not_be_empty(cls, v):
-        if v is not None and not v.strip():
-            raise ValueError('Password must not be empty')
+    def password_valid(cls, v):
+        if v is not None:
+            if not v.strip():
+                raise ValueError('Password must not be empty')
+            if len(v) < 6:
+                raise ValueError('Password must be at least 6 characters long')
         return v
 
-    model_config = ConfigDict()
+    class Config:
+        from_attributes = True
+        model_config = ConfigDict()
 
 
 class Token(BaseModel):
@@ -132,3 +167,7 @@ class Token(BaseModel):
     access_token: str  # JWT アクセストークン
     token_type: str  # トークンのタイプ（例: "bearer"）
     refresh_token: Optional[str] = None  # JWT リフレッシュトークン
+
+    class Config:
+        from_attributes = True
+        model_config = ConfigDict()
