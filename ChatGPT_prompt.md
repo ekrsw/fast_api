@@ -27,6 +27,7 @@ my_fastapi_project/
 │   ├── test_create_admin.py
 │   ├── test_crud.py
 │   ├── test_dependencies.py
+│   ├── test_main.py
 │   ├── test_models.py
 │   └── test_schemas.py
 ├── docker-compose.yml
@@ -2297,6 +2298,426 @@ async def test_get_db_dependency_overridden(client, db_session, unique_username)
     assert response.status_code == 200, f"ユーザー取得に失敗: {response.text}"
     data = response.json()
     assert data["username"] == username
+```
+## tests/test_main.py
+```tests/test_main.py
+# tests/test_main.py
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.main import on_startup
+from app.database import Base
+from sqlalchemy import inspect
+from unittest.mock import patch
+
+@pytest.mark.asyncio
+async def test_on_startup_event(db_session: AsyncSession):
+    """
+    on_startup イベントが正しくテーブルを作成することを確認するテスト。
+    
+    Args:
+        db_session (AsyncSession): テスト用のデータベースセッション（conftest.pyで提供）。
+    """
+    # テスト用エンジンを取得（既にテスト用のSQLiteエンジンが使用されている）
+    test_engine = db_session.bind
+    
+    # テスト前にテーブルを削除してクリーンな状態にする
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    
+    # app.database.engine をテスト用エンジンにパッチ
+    with patch('app.database.engine', test_engine):
+        await on_startup()
+    
+    # テーブルが作成されたことを確認
+    async with test_engine.connect() as conn:
+        # テーブル名を取得するヘルパー関数を定義
+        def get_table_names(conn):
+            inspector = inspect(conn)
+            return inspector.get_table_names()
+        
+        # run_sync を使用して同期的にテーブル名を取得
+        tables = await conn.run_sync(get_table_names)
+        assert "users" in tables, "users テーブルが存在しません。"
+        assert "items" in tables, "items テーブルが存在しません。"
+```
+## tests/test_models.py
+```tests/test_models.py
+import pytest
+import uuid
+import asyncio
+from datetime import datetime, timedelta
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import models, schemas, crud
+from app.auth import pwd_context
+
+
+@pytest.fixture
+def unique_username():
+    """ユニークなユーザー名を生成するフィクスチャ"""
+    return f"user_{uuid.uuid4()}"
+
+
+@pytest.fixture
+def unique_item_name():
+    """ユニークなアイテム名を生成するフィクスチャ"""
+    return f"item_{uuid.uuid4()}"
+
+
+@pytest.mark.asyncio
+async def test_create_user_model(db_session: AsyncSession, unique_username: str):
+    """
+    Userモデルを作成し、フィールドが正しく設定されていることを確認します。
+    """
+    password = "securepassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    assert user.id is not None, "ユーザーIDが設定されていること"
+    assert user.username == unique_username, "ユーザー名が正しいこと"
+    assert user.is_admin is False, "is_adminがFalseであること"
+    assert pwd_context.verify(password, user.hashed_password), "パスワードが正しくハッシュ化されていること"
+    assert user.created_at is not None, "created_atが設定されていること"
+    assert user.updated_at is not None, "updated_atが設定されていること"
+    assert isinstance(user.created_at, datetime), "created_atがdatetime型であること"
+    assert isinstance(user.updated_at, datetime), "updated_atがdatetime型であること"
+
+
+@pytest.mark.asyncio
+async def test_create_item_model(db_session: AsyncSession, unique_item_name: str):
+    """
+    Itemモデルを作成し、フィールドが正しく設定されていることを確認します。
+    """
+    item_create = schemas.ItemCreate(name=unique_item_name)
+    item = await crud.create_item(db_session, item_create)
+
+    assert item.id is not None, "アイテムIDが設定されていること"
+    assert item.name == unique_item_name, "アイテム名が正しいこと"
+    assert item.created_at is not None, "created_atが設定されていること"
+    assert item.updated_at is not None, "updated_atが設定されていること"
+    assert isinstance(item.created_at, datetime), "created_atがdatetime型であること"
+    assert isinstance(item.updated_at, datetime), "updated_atがdatetime型であること"
+
+
+@pytest.mark.asyncio
+async def test_user_created_at_updated_at(db_session: AsyncSession, unique_username: str):
+    """
+    Userモデルのcreated_atとupdated_atが正しく設定されていることを確認します。
+    """
+    user_create = schemas.UserCreate(username=unique_username, password="password")
+    user = await crud.create_user(db_session, user_create)
+
+    assert user.created_at <= datetime.utcnow(), "created_atが現在時刻以前であること"
+    assert user.updated_at <= datetime.utcnow(), "updated_atが現在時刻以前であること"
+
+    # 少し待ってからユーザーを更新
+    await asyncio.sleep(1)  # 時間差を確保
+    user_update = schemas.UserUpdate(username="newusername")
+    updated_user = await crud.update_user(db_session, username=unique_username, user_update=user_update)
+
+    assert updated_user.updated_at > updated_user.created_at, "updated_atがcreated_atより新しいこと"
+
+
+@pytest.mark.asyncio
+async def test_item_created_at_updated_at(db_session: AsyncSession, unique_item_name: str):
+    """
+    Itemモデルのcreated_atとupdated_atが正しく設定されていることを確認します。
+    """
+    item_create = schemas.ItemCreate(name=unique_item_name)
+    item = await crud.create_item(db_session, item_create)
+
+    assert item.created_at <= datetime.utcnow(), "created_atが現在時刻以前であること"
+    assert item.updated_at <= datetime.utcnow(), "updated_atが現在時刻以前であること"
+
+    # 少し待ってからアイテムを更新
+    await asyncio.sleep(1)  # 時間差を確保
+    item_update = schemas.ItemCreate(name="updatedname")
+    updated_item = await crud.update_item(db_session, item_id=item.id, item=item_update)
+
+    assert updated_item.updated_at > updated_item.created_at, "updated_atがcreated_atより新しいこと"
+    assert updated_item.name == "updatedname", "アイテム名が更新されていること"
+
+
+@pytest.mark.asyncio
+async def test_user_model_constraints(db_session: AsyncSession, unique_username: str):
+    """
+    Userモデルのユニーク制約をテストします。重複するユーザー名での作成が失敗することを確認します。
+    """
+    user_create = schemas.UserCreate(username=unique_username, password="password")
+    await crud.create_user(db_session, user_create)
+
+    with pytest.raises(Exception) as exc_info:
+        # 同じユーザー名で再度ユーザーを作成
+        await crud.create_user(db_session, user_create)
+    
+    # エラーメッセージや例外の種類を確認することもできます
+    # 例えば、SQLAlchemyのIntegrityErrorを期待する場合：
+    # from sqlalchemy.exc import IntegrityError
+    # assert isinstance(exc_info.value, IntegrityError)
+    assert exc_info.type is not None, "重複ユーザー名での作成時に例外が発生すること"
+
+
+@pytest.mark.asyncio
+async def test_item_model_constraints(db_session: AsyncSession, unique_item_name: str):
+    """
+    Itemモデルのユニーク制約（もしあれば）をテストします。重複するアイテム名での作成が失敗することを確認します。
+    """
+    # 既にunique制約がある場合のみテストします。現状models.pyではnameにunique制約がないので、このテストは不要かもしれません。
+    # ここではnameがuniqueではないため、同じ名前で複数のアイテムを作成できることを確認します。
+    item_create = schemas.ItemCreate(name=unique_item_name)
+    item1 = await crud.create_item(db_session, item_create)
+    item2 = await crud.create_item(db_session, item_create)
+
+    assert item1.id != item2.id, "異なるIDを持つアイテムが作成されること"
+    assert item1.name == item2.name, "同じ名前のアイテムが作成されること"
+```
+## tests/test_schemas.py
+```tests/test_schemas.py
+import pytest
+from pydantic import ValidationError
+from datetime import datetime
+
+from app import schemas
+
+
+@pytest.mark.asyncio
+async def test_item_base_valid():
+    """
+    ItemBaseモデルが有効なデータで正常に作成されることを確認します。
+    """
+    data = {"name": "Test Item"}
+    item_base = schemas.ItemBase(**data)
+    assert item_base.name == "Test Item"
+
+
+@pytest.mark.asyncio
+async def test_item_base_invalid_missing_name():
+    """
+    ItemBaseモデルで'name'フィールドが欠けている場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.ItemBase()
+    assert "name" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_item_create_valid():
+    """
+    ItemCreateモデルが有効なデータで正常に作成されることを確認します。
+    """
+    data = {"name": "New Item"}
+    item_create = schemas.ItemCreate(**data)
+    assert item_create.name == "New Item"
+
+
+@pytest.mark.asyncio
+async def test_item_create_invalid_empty_name():
+    """
+    ItemCreateモデルで'name'が空文字の場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.ItemCreate(name="")
+    assert "Name must not be empty" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_item_valid():
+    """
+    Itemモデルが有効なデータで正常に作成されることを確認します。
+    """
+    data = {
+        "id": 1,
+        "name": "Existing Item",
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+    item = schemas.Item(**data)
+    assert item.id == 1
+    assert item.name == "Existing Item"
+    assert isinstance(item.created_at, datetime)
+    assert isinstance(item.updated_at, datetime)
+
+
+@pytest.mark.asyncio
+async def test_item_invalid_missing_fields():
+    """
+    Itemモデルで必須フィールドが欠けている場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.Item(id=1, name="Item Without Timestamps")
+    assert "created_at" in str(exc_info.value)
+    assert "updated_at" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_user_create_valid():
+    """
+    UserCreateモデルが有効なデータで正常に作成されることを確認します。
+    """
+    data = {"username": "testuser", "password": "securepassword"}
+    user_create = schemas.UserCreate(**data)
+    assert user_create.username == "testuser"
+    assert user_create.password == "securepassword"
+
+
+@pytest.mark.asyncio
+async def test_user_create_invalid_short_password():
+    """
+    UserCreateモデルでパスワードが短すぎる場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.UserCreate(username="testuser", password="123")
+    assert "Password must be at least 6 characters long" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_user_create_invalid_missing_fields():
+    """
+    UserCreateモデルで必須フィールドが欠けている場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.UserCreate(username="testuser")
+    assert "password" in str(exc_info.value)
+
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.UserCreate(password="securepassword")
+    assert "username" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_user_valid():
+    """
+    Userモデルが有効なデータで正常に作成されることを確認します。
+    """
+    data = {
+        "id": 1,
+        "username": "existinguser",
+        "is_admin": True
+    }
+    user = schemas.User(**data)
+    assert user.id == 1
+    assert user.username == "existinguser"
+    assert user.is_admin is True
+
+
+@pytest.mark.asyncio
+async def test_user_invalid_missing_fields():
+    """
+    Userモデルで必須フィールドが欠けている場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.User(username="userwithoutid")
+    assert "id" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_user_update_valid():
+    """
+    UserUpdateモデルが有効なデータで正常に作成されることを確認します。
+    """
+    data = {
+        "username": "updateduser",
+        "password": "newpassword",
+        "is_admin": False
+    }
+    user_update = schemas.UserUpdate(**data)
+    assert user_update.username == "updateduser"
+    assert user_update.password == "newpassword"
+    assert user_update.is_admin is False
+
+
+@pytest.mark.asyncio
+async def test_user_update_optional_fields():
+    """
+    UserUpdateモデルで一部のフィールドが省略されている場合、正常に作成されることを確認します。
+    """
+    data = {
+        "username": "partialupdateuser"
+    }
+    user_update = schemas.UserUpdate(**data)
+    assert user_update.username == "partialupdateuser"
+    assert user_update.password is None
+    assert user_update.is_admin is None
+
+
+@pytest.mark.asyncio
+async def test_user_update_invalid_empty_username():
+    """
+    UserUpdateモデルでusernameが空文字の場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.UserUpdate(username="   ")
+    assert "Username must not be empty" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_user_update_invalid_empty_password():
+    """
+    UserUpdateモデルでpasswordが空文字の場合、ValidationErrorが発生することを確認します。
+    """
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.UserUpdate(password=" ")
+    assert "Password must not be empty" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_token_valid_with_refresh():
+    """
+    Tokenモデルが有効なデータで正常に作成されることを確認します。
+    """
+    data = {
+        "access_token": "access123",
+        "token_type": "bearer",
+        "refresh_token": "refresh123"
+    }
+    token = schemas.Token(**data)
+    assert token.access_token == "access123"
+    assert token.token_type == "bearer"
+    assert token.refresh_token == "refresh123"
+
+
+@pytest.mark.asyncio
+async def test_token_valid_without_refresh():
+    """
+    Tokenモデルがrefresh_tokenなしで正常に作成されることを確認します。
+    """
+    data = {
+        "access_token": "access123",
+        "token_type": "bearer"
+    }
+    token = schemas.Token(**data)
+    assert token.access_token == "access123"
+    assert token.token_type == "bearer"
+    assert token.refresh_token is None
+
+
+@pytest.mark.asyncio
+async def test_token_invalid_missing_access_token():
+    """
+    Tokenモデルでaccess_tokenが欠けている場合、ValidationErrorが発生することを確認します。
+    """
+    data = {
+        "token_type": "bearer",
+        "refresh_token": "refresh123"
+    }
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.Token(**data)
+    assert "access_token" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_token_invalid_missing_token_type():
+    """
+    Tokenモデルでtoken_typeが欠けている場合、ValidationErrorが発生することを確認します。
+    """
+    data = {
+        "access_token": "access123",
+        "refresh_token": "refresh123"
+    }
+    with pytest.raises(ValidationError) as exc_info:
+        schemas.Token(**data)
+    assert "token_type" in str(exc_info.value)
 ```
 ## docker/Dockerfile
 ```docker/Dockerfile
