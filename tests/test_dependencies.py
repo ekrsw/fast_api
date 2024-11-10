@@ -1,4 +1,3 @@
-# tests/test_dependencies.py
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select

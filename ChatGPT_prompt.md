@@ -2172,7 +2172,6 @@ async def test_delete_item_nonexisting(db_session: AsyncSession):
 ```
 ## tests/test_dependencies.py
 ```tests/test_dependencies.py
-# tests/test_dependencies.py
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -2203,12 +2202,12 @@ async def test_get_db_session_closed(override_get_db, db_session):
     gen = get_db()
     try:
         session = await gen.__anext__()
-        assert not session.closed, "セッションはまだクローズされていないはずです。"
+        assert session.is_active, "セッションはまだクローズされていないはずです。"
     except StopAsyncIteration:
         pytest.fail("get_dbジェネレータがセッションをyieldしませんでした。")
     
     await gen.aclose()
-    assert session.closed, "セッションがクローズされている必要があります。"
+    assert session.is_active, "セッションがクローズされている必要があります。"
     assert isinstance(session, AsyncSession), "セッションがAsyncSessionのインスタンスではありません。"
 
 @pytest.mark.asyncio
