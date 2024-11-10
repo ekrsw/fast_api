@@ -1,11 +1,13 @@
 import pytest
 import pytest_asyncio
+import uuid
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.dependencies import get_db
 from app.database import Base
+
 
 # テスト用データベースURL（SQLiteのメモリデータベースを使用）
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -46,3 +48,13 @@ async def client(override_get_db):
     # AsyncClientを使用してテストクライアントを作成
     async with AsyncClient(app=app, base_url="http://test") as c:
         yield c
+
+@pytest.fixture
+def unique_username():
+    """ユニークなユーザー名を生成するフィクスチャ"""
+    return f"user_{uuid.uuid4()}"
+
+@pytest.fixture
+def unique_item_name():
+    """ユニークなアイテム名を生成するフィクスチャ"""
+    return f"item_{uuid.uuid4()}"

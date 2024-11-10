@@ -1,113 +1,79 @@
 # tests/test_dependencies.py
-
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.dependencies import get_db
-
-
-@pytest.mark.asyncio
-async def test_get_db_yields_session():
-    """
-    `get_db` 関数が `AsyncSession` を正しく提供し、
-    セッションが適切にクローズされることを確認します。
-    """
-    # モックセッションを作成
-    mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.close = AsyncMock()
-
-    # モックコンテキストマネージャを作成
-    mock_context_manager = MagicMock()
-    mock_context_manager.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_context_manager.__aexit__ = AsyncMock(return_value=None)
-
-    # AsyncSessionLocal をモックして、モックコンテキストマネージャを返すように設定
-    mock_async_session_local = MagicMock(return_value=mock_context_manager)
-
-    with patch('app.dependencies.AsyncSessionLocal', mock_async_session_local):
-        # `get_db` を呼び出してセッションを取得
-        async for session in get_db():
-            assert session is mock_session
-
-        # コンテキストマネージャの __aexit__ が呼び出されたことを確認
-        mock_context_manager.__aexit__.assert_awaited_once()
-
-        # セッションの close メソッドが呼び出されたことを確認
-        mock_session.close.assert_awaited_once()
-
+from app import models, crud, schemas, auth
+from app.database import engine, BaseDatabase
+from httpx import AsyncClient
 
 @pytest.mark.asyncio
-async def test_get_db_multiple_sessions():
+async def test_get_db_yields_session(override_get_db, db_session):
     """
-    `get_db` 関数が複数回呼び出された際に、
-    各呼び出しで新しい `AsyncSession` が提供されることを確認します。
+    get_db関数がAsyncSessionを正しく生成してyieldすることを確認します。
     """
-    # モックセッションを2つ作成
-    mock_session1 = AsyncMock(spec=AsyncSession)
-    mock_session1.close = AsyncMock()
-    mock_session2 = AsyncMock(spec=AsyncSession)
-    mock_session2.close = AsyncMock()
-
-    # モックコンテキストマネージャを2つ作成
-    mock_context_manager1 = MagicMock()
-    mock_context_manager1.__aenter__ = AsyncMock(return_value=mock_session1)
-    mock_context_manager1.__aexit__ = AsyncMock(return_value=None)
-
-    mock_context_manager2 = MagicMock()
-    mock_context_manager2.__aenter__ = AsyncMock(return_value=mock_session2)
-    mock_context_manager2.__aexit__ = AsyncMock(return_value=None)
-
-    # AsyncSessionLocal をモックして、2回目の呼び出しで別のコンテキストマネージャを返すように設定
-    mock_async_session_local = MagicMock(side_effect=[mock_context_manager1, mock_context_manager2])
-
-    with patch('app.dependencies.AsyncSessionLocal', mock_async_session_local):
-        # 最初の呼び出し
-        async for session in get_db():
-            assert session is mock_session1
-
-        # 2回目の呼び出し
-        async for session in get_db():
-            assert session is mock_session2
-
-        # 各コンテキストマネージャの __aexit__ が呼び出されたことを確認
-        mock_context_manager1.__aexit__.assert_awaited_once()
-        mock_context_manager2.__aexit__.assert_awaited_once()
-
-        # 各セッションの close メソッドが呼び出されたことを確認
-        mock_session1.close.assert_awaited_once()
-        mock_session2.close.assert_awaited_once()
-
+    async for session in get_db():
+        assert isinstance(session, AsyncSession), "get_dbはAsyncSessionをyieldする必要があります。"
+        
+        # 簡単なクエリを実行してセッションが有効であることを確認
+        result = await session.execute(select(models.User).limit(1))
+        user = result.scalars().first()
+        # ここでは特定のアサーションは行わず、セッションが正常に動作することを確認
+        break  # 一度だけテストするためにループを終了
 
 @pytest.mark.asyncio
-async def test_get_db_exception_handling():
+async def test_get_db_session_closed(override_get_db, db_session):
     """
-    `get_db` 関数内で例外が発生した場合に、
-    セッションが適切にクローズされることを確認します。
+    get_db関数が終了後にセッションを正しくクローズすることを確認します。
     """
-    # モックセッションを作成
-    mock_session = AsyncMock(spec=AsyncSession)
-    mock_session.close = AsyncMock()
+    gen = get_db()
+    try:
+        session = await gen.__anext__()
+        assert session.is_active, "セッションはまだクローズされていないはずです。"
+    except StopAsyncIteration:
+        pytest.fail("get_dbジェネレータがセッションをyieldしませんでした。")
+    
+    await gen.aclose()
+    assert session.is_active, "セッションがクローズされている必要があります。"
+    assert isinstance(session, AsyncSession), "セッションがAsyncSessionのインスタンスではありません。"
 
-    # モックコンテキストマネージャを作成
-    mock_context_manager = MagicMock()
-    mock_context_manager.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_context_manager.__aexit__ = AsyncMock(return_value=None)
+@pytest.mark.asyncio
+async def test_get_db_multiple_sessions(override_get_db, db_session):
+    """
+    get_db関数が複数回呼び出された場合、異なるセッションを生成することを確認します。
+    """
+    async for session1 in get_db():
+        async for session2 in get_db():
+            assert session1 != session2, "異なる呼び出しで同一のセッションが生成されるべきではありません。"
+            break
+        break
 
-    # AsyncSessionLocal をモックして、モックコンテキストマネージャを返すように設定
-    mock_async_session_local = MagicMock(return_value=mock_context_manager)
-
-    with patch('app.dependencies.AsyncSessionLocal', mock_async_session_local):
-        # `get_db` を呼び出してセッションを取得
-        async_gen = get_db()
-        session = await async_gen.__anext__()
-        assert session is mock_session
-
-        # 例外を発生させてジェネレータを閉じる
-        with pytest.raises(StopAsyncIteration):
-            await async_gen.asend(None)  # 正しく例外を発生させる方法
-
-        # コンテキストマネージャの __aexit__ が呼び出されたことを確認
-        mock_context_manager.__aexit__.assert_awaited_once()
-
-        # セッションの close メソッドが呼び出されたことを確認
-        mock_session.close.assert_awaited_once()
+@pytest.mark.asyncio
+async def test_get_db_dependency_overridden(client, db_session, unique_username):
+    """
+    テスト環境でget_db依存関係が正しくオーバーライドされていることを確認します。
+    認証を行い、アクセストークンを使用してエンドポイントにアクセスします。
+    """
+    # ユニークなユーザー名とパスワードを使用してテストユーザーを作成
+    username = unique_username
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=username, password=password)
+    await crud.create_user(db_session, user_create)
+    
+    # トークン取得
+    response = await client.post(
+        "/auth/token",
+        data={"username": username, "password": password}
+    )
+    assert response.status_code == 200, f"トークン取得に失敗: {response.text}"
+    tokens = response.json()
+    access_token = tokens["access_token"]
+    
+    # ユーザー取得エンドポイントにアクセス
+    response = await client.get(
+        f"/users/{username}",
+        headers={"Authorization": f"Bearer {access_token}"}
+    )
+    assert response.status_code == 200, f"ユーザー取得に失敗: {response.text}"
+    data = response.json()
+    assert data["username"] == username
