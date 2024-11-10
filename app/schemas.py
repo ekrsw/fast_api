@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, constr, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -12,8 +12,10 @@ class ItemBase(BaseModel):
     name : str
         アイテムの名前。
     """
-    name: str  # アイテムの名前
-
+    
+    name: constr(min_length=1)  # 空文字を禁止
+    class Config:
+        from_attributes = True
 
 class ItemCreate(ItemBase):
     """
@@ -53,12 +55,12 @@ class UserCreate(BaseModel):
     Attributes
     ----------
     username : str
-        ユーザー名。
+        ユーザー名。3文字以上、50文字以下
     password : str
-        パスワード。
+        パスワード。6文字以上
     """
-    username: str  # ユーザー名
-    password: str  # パスワード
+    username: constr(min_length=3, max_length=50)
+    password: constr(min_length=6)
 
 
 class User(BaseModel):
@@ -95,21 +97,23 @@ class UserUpdate(BaseModel):
     is_admin : Optional[bool]
         管理者権限フラグ。省略可能。
     """
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
-    password: Optional[str] = Field(None, min_length=6)
+    username: Optional[constr(min_length=3, max_length=50)] = None
+    password: Optional[constr(min_length=6)] = None
     is_admin: Optional[bool] = None
 
-    @validator('username')
+    @field_validator('username')
     def username_must_not_be_empty(cls, v):
         if v is not None and not v.strip():
             raise ValueError('Username must not be empty')
         return v
 
-    @validator('password')
+    @field_validator('password')
     def password_must_not_be_empty(cls, v):
         if v is not None and not v.strip():
             raise ValueError('Password must not be empty')
         return v
+
+    model_config = ConfigDict()
 
 
 class Token(BaseModel):

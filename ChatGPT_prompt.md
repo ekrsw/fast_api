@@ -824,7 +824,7 @@ class Item(BaseDatabase):
 ```
 ## app/schemas.py
 ```app/schemas.py
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from typing import Optional
 
@@ -925,17 +925,19 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=6)
     is_admin: Optional[bool] = None
 
-    @validator('username')
+    @field_validator('username')
     def username_must_not_be_empty(cls, v):
         if v is not None and not v.strip():
             raise ValueError('Username must not be empty')
         return v
 
-    @validator('password')
+    @field_validator('password')
     def password_must_not_be_empty(cls, v):
         if v is not None and not v.strip():
             raise ValueError('Password must not be empty')
         return v
+
+    model_config = ConfigDict()
 
 
 class Token(BaseModel):
