@@ -24,7 +24,11 @@ my_fastapi_project/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_auth.py
-│   └── test_create_admin.py
+│   ├── test_create_admin.py
+│   ├── test_crud.py
+│   ├── test_dependencies.py
+│   ├── test_models.py
+│   └── test_schemas.py
 ├── docker-compose.yml
 ├── requirements.txt
 └── README.md
