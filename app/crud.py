@@ -4,6 +4,7 @@ from sqlalchemy import update, delete
 from . import models, schemas, auth
 from typing import Optional, List
 
+
 # ユーザー名でユーザーを取得する関数
 async def get_user_by_username(db: AsyncSession, username: str) -> Optional[models.User]:
     """
@@ -107,13 +108,6 @@ async def update_user(db: AsyncSession, username: str, user_update: schemas.User
     await db.commit()
     await db.refresh(db_user)
     return db_user
-
-# app/crud.py
-
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
-from . import models, schemas
 
 # ユーザーを削除する関数
 async def delete_user(db: AsyncSession, username: str) -> Optional[models.User]:
