@@ -30,6 +30,7 @@ my_fastapi_project/
 │   ├── test_main.py
 │   ├── test_models.py
 │   ├── test_router_auth.py
+│   ├── test_router_items.py
 │   ├── test_router_users.py
 │   └── test_schemas.py
 ├── docker-compose.yml
@@ -1630,164 +1631,6 @@ async def client(override_get_db):
     async with AsyncClient(app=app, base_url="http://test") as c:
         yield c
 ```
-## tests/test_auth_router.py
-```tests/test_auth_router.py
-# tests/test_auth_router.py
-
-import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
-from jose import jwt
-from app import schemas, crud
-from app.config import settings
-
-import uuid
-
-@pytest.fixture
-def unique_username():
-    """ユニークなユーザー名を生成するフィクスチャ"""
-    return f"user_{uuid.uuid4()}"
-
-
-@pytest.mark.asyncio
-async def test_login_for_access_token_success(client: AsyncClient, db_session: AsyncSession):
-    """
-    正しい認証情報を使用してアクセストークンとリフレッシュトークンを取得できることを確認します。
-    """
-    # テストユーザーの作成
-    username = "testuser"
-    password = "testpassword"
-    user_create = schemas.UserCreate(username=username, password=password)
-    await crud.create_user(db_session, user_create)
-
-    # /auth/token エンドポイントにリクエストを送信
-    response = await client.post(
-        "/auth/token",
-        data={"username": username, "password": password}
-    )
-
-    assert response.status_code == 200, f"トークン取得に失敗しました: {response.text}"
-    tokens = response.json()
-    assert "access_token" in tokens, "レスポンスに access_token が含まれていません"
-    assert tokens["token_type"] == "bearer", "トークンタイプが正しくありません"
-    assert "refresh_token" in tokens, "レスポンスに refresh_token が含まれていません"
-
-    # アクセストークンのデコードと検証
-    access_token = tokens["access_token"]
-    payload = jwt.decode(access_token, settings.secret_key, algorithms=[settings.algorithm])
-    assert payload.get("sub") == username, "アクセストークンのペイロードが正しくありません"
-
-
-@pytest.mark.asyncio
-async def test_login_for_access_token_invalid_credentials(client: AsyncClient):
-    """
-    無効な認証情報でトークン取得が失敗することを確認します。
-    """
-    # 存在しないユーザーでリクエストを送信
-    response = await client.post(
-        "/auth/token",
-        data={"username": "invaliduser", "password": "invalidpassword"}
-    )
-
-    assert response.status_code == 401, "無効な認証情報で 401 エラーが返されるべきです"
-    assert response.json()["detail"] == "Incorrect username or password", "エラーメッセージが正しくありません"
-
-
-@pytest.mark.asyncio
-async def test_refresh_access_token_success(client: AsyncClient, db_session: AsyncSession, unique_username):
-    """
-    正しいリフレッシュトークンを使用して新しいアクセストークンを取得できることを確認します。
-    """
-    # テストユーザーの作成
-    username = unique_username
-    password = "testpassword"
-    user_create = schemas.UserCreate(username=username, password=password)
-    await crud.create_user(db_session, user_create)
-
-    # トークン取得
-    response = await client.post(
-        "/auth/token",
-        data={"username": username, "password": password}
-    )
-    tokens = response.json()
-    refresh_token = tokens["refresh_token"]
-
-    # /auth/refresh エンドポイントにリクエストを送信
-    response = await client.post(
-        "/auth/refresh",
-        headers={"Refresh-Token": refresh_token}
-    )
-
-    assert response.status_code == 200, f"アクセストークンのリフレッシュに失敗しました: {response.text}"
-    new_tokens = response.json()
-    assert "access_token" in new_tokens, "レスポンスに新しい access_token が含まれていません"
-    assert new_tokens["token_type"] == "bearer", "トークンタイプが正しくありません"
-
-    # 新しいアクセストークンのデコードと検証
-    access_token = new_tokens["access_token"]
-    payload = jwt.decode(access_token, settings.secret_key, algorithms=[settings.algorithm])
-    assert payload.get("sub") == username, "新しいアクセストークンのペイロードが正しくありません"
-
-
-@pytest.mark.asyncio
-async def test_refresh_access_token_invalid_token(client: AsyncClient):
-    """
-    無効なリフレッシュトークンでアクセストークンのリフレッシュが失敗することを確認します。
-    """
-    # 無効なリフレッシュトークンを使用
-    response = await client.post(
-        "/auth/refresh",
-        headers={"Refresh-Token": "invalidtoken"}
-    )
-
-    assert response.status_code == 401, "無効なリフレッシュトークンで 401 エラーが返されるべきです"
-    assert response.json()["detail"] == "Invalid token", "エラーメッセージが正しくありません"
-
-
-@pytest.mark.asyncio
-async def test_access_protected_route_with_token(client: AsyncClient, db_session: AsyncSession):
-    """
-    取得したアクセストークンを使用して保護されたエンドポイントにアクセスできることを確認します。
-    """
-    # テストユーザーの作成
-    username = "protecteduser"
-    password = "protectedpassword"
-    user_create = schemas.UserCreate(username=username, password=password)
-    await crud.create_user(db_session, user_create)
-
-    # トークン取得
-    response = await client.post(
-        "/auth/token",
-        data={"username": username, "password": password}
-    )
-    tokens = response.json()
-    access_token = tokens["access_token"]
-
-    # 保護されたエンドポイントにアクセス
-    response = await client.get(
-        f"/users/{username}",
-        headers={"Authorization": f"Bearer {access_token}"}
-    )
-
-    assert response.status_code == 200, f"保護されたエンドポイントへのアクセスに失敗しました: {response.text}"
-    data = response.json()
-    assert data["username"] == username, "取得したユーザー名が正しくありません"
-
-
-@pytest.mark.asyncio
-async def test_access_protected_route_with_invalid_token(client: AsyncClient):
-    """
-    無効なアクセストークンで保護されたエンドポイントにアクセスできないことを確認します。
-    """
-    # 無効なアクセストークンを使用
-    response = await client.get(
-        "/users/someuser",
-        headers={"Authorization": "Bearer invalidtoken"}
-    )
-
-    assert response.status_code == 401, "無効なアクセストークンで 401 エラーが返されるべきです"
-    assert response.json()["detail"] == "Could not validate credentials", "エラーメッセージが正しくありません"
-```
 ## tests/test_auth.py
 ```tests/test_auth.py
 import pytest
@@ -2005,7 +1848,6 @@ async def test_get_refresh_token_header_present(client, db_session, unique_usern
     new_tokens = response.json()
     assert "access_token" in new_tokens
     assert new_tokens["token_type"] == "bearer"
-
 ```
 ## tests/test_create_admin.py
 ```tests/test_create_admin.py
@@ -2461,7 +2303,6 @@ async def test_get_db_dependency_overridden(client, db_session, unique_username)
 ```
 ## tests/test_main.py
 ```tests/test_main.py
-# tests/test_main.py
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.main import on_startup
@@ -2633,7 +2474,7 @@ async def test_item_model_constraints(db_session: AsyncSession, unique_item_name
     assert item1.name == item2.name, "同じ名前のアイテムが作成されること"
 ```
 ## tests/test_router_auth.py
-```## tests/test_router_auth.py
+```tests/test_router_auth.py
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -2788,9 +2629,300 @@ async def test_access_protected_route_with_invalid_token(client: AsyncClient):
     assert response.status_code == 401, "無効なアクセストークンで 401 エラーが返されるべきです"
     assert response.json()["detail"] == "Could not validate credentials", "エラーメッセージが正しくありません"
 ```
+## tests/test_router_items.py
+```tests/test_router_items.py
+import pytest
+import uuid
+from httpx import AsyncClient
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import schemas, crud
+from app.auth import create_access_token
+from app.config import settings
+from datetime import timedelta
+
+
+@pytest.fixture
+def unique_item_name():
+    """テスト用のユニークなアイテム名を生成します。"""
+    return f"item_{uuid.uuid4()}"
+
+
+@pytest.fixture
+def unique_username():
+    """テスト用のユニークなユーザー名を生成します。"""
+    return f"user_{uuid.uuid4()}"
+
+
+@pytest.mark.asyncio
+async def test_create_item(client: AsyncClient, db_session: AsyncSession, unique_item_name: str, unique_username: str):
+    """
+    新しいアイテムを作成するテスト。
+
+    有効なアクセストークンが提供された場合に新しいアイテムが作成できることを確認します。
+    """
+    # テストユーザーを作成
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    # アクセストークンを生成
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    # 認証ヘッダーを準備
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # アイテムデータ
+    item_data = {"name": unique_item_name}
+
+    # アイテム作成リクエストを送信
+    response = await client.post("/items/", json=item_data, headers=headers)
+
+    assert response.status_code == 200, f"アイテムの作成に失敗しました: {response.text}"
+    item = response.json()
+    assert item["name"] == unique_item_name, "アイテム名が一致しません"
+    assert "id" in item, "アイテムIDが返されていません"
+    assert "created_at" in item, "アイテムの作成日時が返されていません"
+    assert "updated_at" in item, "アイテムの更新日時が返されていません"
+
+
+@pytest.mark.asyncio
+async def test_read_items(client: AsyncClient, db_session: AsyncSession, unique_item_name: str, unique_username: str):
+    """
+    複数のアイテムを取得するテスト。
+
+    有効なアクセストークンが提供された場合に複数のアイテムが取得できることを確認します。
+    """
+    # テストユーザーを作成
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    # アクセストークンを生成
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    # 認証ヘッダーを準備
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # 複数のアイテムを作成
+    item_names = [f"item_{uuid.uuid4()}" for _ in range(5)]
+    for name in item_names:
+        item_data = {"name": name}
+        await client.post("/items/", json=item_data, headers=headers)
+
+    # アイテム取得リクエストを送信
+    response = await client.get("/items/", headers=headers)
+
+    assert response.status_code == 200, f"アイテムの取得に失敗しました: {response.text}"
+    items = response.json()
+    retrieved_names = [item["name"] for item in items]
+    for name in item_names:
+        assert name in retrieved_names, f"アイテム {name} が取得結果に含まれていません"
+
+
+@pytest.mark.asyncio
+async def test_read_item(client: AsyncClient, db_session: AsyncSession, unique_item_name: str, unique_username: str):
+    """
+    特定のアイテムを取得するテスト。
+
+    有効なアクセストークンが提供された場合に特定のアイテムがIDで取得できることを確認します。
+    """
+    # テストユーザーを作成
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    # アクセストークンを生成
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    # 認証ヘッダーを準備
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # アイテムを作成
+    item_data = {"name": unique_item_name}
+    create_response = await client.post("/items/", json=item_data, headers=headers)
+    item = create_response.json()
+    item_id = item["id"]
+
+    # 特定のアイテム取得リクエストを送信
+    response = await client.get(f"/items/{item_id}", headers=headers)
+
+    assert response.status_code == 200, f"アイテムの取得に失敗しました: {response.text}"
+    retrieved_item = response.json()
+    assert retrieved_item["id"] == item_id, "アイテムIDが一致しません"
+    assert retrieved_item["name"] == unique_item_name, "アイテム名が一致しません"
+
+
+@pytest.mark.asyncio
+async def test_update_item(client: AsyncClient, db_session: AsyncSession, unique_item_name: str, unique_username: str):
+    """
+    アイテムを更新するテスト。
+
+    有効なアクセストークンが提供された場合にアイテムが更新できることを確認します。
+    """
+    # テストユーザーを作成
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    # アクセストークンを生成
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    # 認証ヘッダーを準備
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # アイテムを作成
+    item_data = {"name": unique_item_name}
+    create_response = await client.post("/items/", json=item_data, headers=headers)
+    item = create_response.json()
+    item_id = item["id"]
+
+    # 更新データ
+    updated_name = "Updated Item Name"
+    update_data = {"name": updated_name}
+
+    # アイテム更新リクエストを送信
+    response = await client.put(f"/items/{item_id}", json=update_data, headers=headers)
+
+    assert response.status_code == 200, f"アイテムの更新に失敗しました: {response.text}"
+    updated_item = response.json()
+    assert updated_item["id"] == item_id, "アイテムIDが一致しません"
+    assert updated_item["name"] == updated_name, "アイテム名が更新されていません"
+
+
+@pytest.mark.asyncio
+async def test_delete_item(client: AsyncClient, db_session: AsyncSession, unique_item_name: str, unique_username: str):
+    """
+    アイテムを削除するテスト。
+
+    有効なアクセストークンが提供された場合にアイテムが削除できることを確認します。
+    """
+    # テストユーザーを作成
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    # アクセストークンを生成
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    # 認証ヘッダーを準備
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # アイテムを作成
+    item_data = {"name": unique_item_name}
+    create_response = await client.post("/items/", json=item_data, headers=headers)
+    item = create_response.json()
+    item_id = item["id"]
+
+    # アイテム削除リクエストを送信
+    response = await client.delete(f"/items/{item_id}", headers=headers)
+
+    assert response.status_code == 200, f"アイテムの削除に失敗しました: {response.text}"
+    detail = response.json()
+    assert detail["detail"] == "Item deleted", "削除メッセージが一致しません"
+
+    # アイテムが存在しないことを確認
+    get_response = await client.get(f"/items/{item_id}", headers=headers)
+    assert get_response.status_code == 404, "削除されたアイテムが取得できてはいけません"
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_access(client: AsyncClient):
+    """
+    アイテムエンドポイントへの未認証アクセスのテスト。
+
+    有効なトークンなしでアクセスした場合に401エラーが返されることを確認します。
+    """
+    # トークンなしでアイテムエンドポイントにアクセス
+    response = await client.get("/items/")
+    assert response.status_code == 401, "未認証アクセスは401を返すべきです"
+    assert response.json()["detail"] == "Not authenticated", "エラーメッセージが一致しません"
+
+
+@pytest.mark.asyncio
+async def test_update_nonexistent_item(client: AsyncClient, db_session: AsyncSession, unique_username: str):
+    """
+    存在しないアイテムを更新するテスト。
+
+    存在しないアイテムを更新しようとした場合に404エラーが返されることを確認します。
+    """
+    # テストユーザーを作成
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    # アクセストークンを生成
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    # 認証ヘッダーを準備
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # 更新データ
+    updated_name = "Updated Item Name"
+    update_data = {"name": updated_name}
+
+    # 存在しないアイテムIDを使用
+    non_existent_item_id = 9999
+
+    # アイテム更新リクエストを送信
+    response = await client.put(f"/items/{non_existent_item_id}", json=update_data, headers=headers)
+
+    assert response.status_code == 404, "存在しないアイテムの更新は404を返すべきです"
+    assert response.json()["detail"] == "Item not found", "エラーメッセージが一致しません"
+
+
+@pytest.mark.asyncio
+async def test_delete_nonexistent_item(client: AsyncClient, db_session: AsyncSession, unique_username: str):
+    """
+    存在しないアイテムを削除するテスト。
+
+    存在しないアイテムを削除しようとした場合に404エラーが返されることを確認します。
+    """
+    # テストユーザーを作成
+    password = "testpassword"
+    user_create = schemas.UserCreate(username=unique_username, password=password)
+    user = await crud.create_user(db_session, user_create)
+
+    # アクセストークンを生成
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+
+    # 認証ヘッダーを準備
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # 存在しないアイテムIDを使用
+    non_existent_item_id = 9999
+
+    # アイテム削除リクエストを送信
+    response = await client.delete(f"/items/{non_existent_item_id}", headers=headers)
+
+    assert response.status_code == 404, "存在しないアイテムの削除は404を返すべきです"
+    assert response.json()["detail"] == "Item not found", "エラーメッセージが一致しません"
+
+```
 ## tests/test_router_users.py
-```## tests/test_router_users.py
-# tests/test_router_users.py
+```tests/test_router_users.py
 import pytest
 import uuid
 from httpx import AsyncClient
@@ -3399,138 +3531,4 @@ async def test_token_invalid_missing_token_type():
     with pytest.raises(ValidationError) as exc_info:
         schemas.Token(**data)
     assert "token_type" in str(exc_info.value)
-```
-## docker/Dockerfile
-```docker/Dockerfile
-FROM python:3.11-slim
-
-# 作業ディレクトリの設定
-WORKDIR /app
-
-# 必要な環境変数を設定
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# 依存関係のインストール
-COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
-
-# アプリケーションコードのコピー
-COPY ./app /app/app
-
-# Uvicornでアプリケーションを起動
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-## docker/nginx.conf
-```docker/nginx.conf
-events {}
-
-http {
-    server {
-        listen 80;
-
-        location / {
-            proxy_pass http://api:8000;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-    }
-}
-```
-## docker-compose.yml
-```docker-compose.yml
-version: '3.8'
-
-services:
-  db:
-    image: postgres:14
-    restart: always
-    env_file:
-      - .env
-    environment:
-      POSTGRES_USER: ${DATABASE_USER}
-      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-      POSTGRES_DB: ${DATABASE_NAME}
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    ports:
-      - "${DATABASE_PORT}:5432"
-
-  api:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    restart: always
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
-      SECRET_KEY: ${SECRET_KEY}
-      ALGORITHM: ${ALGORITHM}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
-    depends_on:
-      - db
-    expose:
-      - "${API_PORT}"
-
-  nginx:
-    image: nginx:latest
-    restart: always
-    env_file:
-      - .env
-    ports:
-      - "${NGINX_PORT}:80"
-    volumes:
-      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - api
-
-volumes:
-  db_data:
-```
-## requirements.txt
-```requirements.txt
-fastapi
-uvicorn[standard]
-SQLAlchemy>=1.4
-asyncpg
-psycopg2-binary
-python-dotenv
-python-jose[cryptography]
-passlib==1.7.4
-pydantic>=2.0.0
-pydantic-settings
-python-multipart
-bcrypt==4.0.1
-databases
-```
-## .env
-```.env
-# Database Configuration
-DATABASE_HOST=db
-DATABASE_PORT=5432
-DATABASE_USER=admin
-DATABASE_PASSWORD=my_database_password
-DATABASE_NAME=my_database
-
-# API Configuration
-API_HOST=0.0.0.0
-API_PORT=8000
-
-# Nginx Configuration
-NGINX_PORT=8080
-
-# JWT Configuration
-SECRET_KEY=your_secret_key_here
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_SECRET_KEY=your_refresh_secret_key_here
-REFRESH_TOKEN_EXPIRE_MINUTES=1440
-
-# Initial Admin User
-INITIAL_ADMIN_USERNAME=admin
-INITIAL_ADMIN_PASSWORD=my_admin_password
 ```

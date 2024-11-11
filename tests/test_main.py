@@ -1,4 +1,3 @@
-# tests/test_main.py
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.main import on_startup
