@@ -92,7 +92,8 @@ async def read_user(
 async def read_users(
         skip: int = 0,
         limit: int = 100,
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        current_user: schemas.User = Depends(get_current_user)
         ) -> List[schemas.User]:
     """
     複数のユーザーを取得します。
