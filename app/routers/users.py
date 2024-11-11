@@ -20,10 +20,10 @@ async def register_user(
         ) -> schemas.User:
     """
     新しいユーザーを登録します。
-    
+
     このエンドポイントは、提供されたユーザー情報を基に新しいユーザーをデータベースに作成します。
     ユーザー名が既に登録されている場合はエラーを返します。
-    認証されたユーザーのみがアクセスできます。
+    認証不要でアクセスできます。
 
     Parameters
     ----------
@@ -54,7 +54,8 @@ async def register_user(
 @router.get("/{username}", response_model=schemas.User)
 async def read_user(
         username: str,
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        current_user: schemas.User = Depends(get_current_user)
         ) -> schemas.User:
     """
     特定のユーザーを取得します。
