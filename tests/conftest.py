@@ -18,7 +18,7 @@ TestingSessionLocal = sessionmaker(
     bind=engine, class_=AsyncSession, expire_on_commit=False
 )
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def setup_db():
     # テスト用データベースのテーブルを作成
     async with engine.begin() as conn:
