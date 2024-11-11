@@ -1,5 +1,3 @@
-# tests/test_auth_router.py
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
